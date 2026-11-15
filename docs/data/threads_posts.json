@@ -3698,5 +3698,15 @@
   "race_name": "",
   "chunk": 0,
   "chars": 0
+ },
+ {
+  "post_id": "18090775973304969",
+  "posted_at": "2026-11-15T09:30:57.838976+09:00",
+  "slot": "post_predict",
+  "pattern": "ability_gap",
+  "race_id": "202608050411",
+  "race_name": "エリザベス女王杯",
+  "chunk": 0,
+  "chars": 252
  }
 ]
