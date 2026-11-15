@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-15T08:32:52.464341+09:00",
+ "generated_at": "2026-11-16T08:42:43.120245+09:00",
  "external_layer_ok": false,
  "last_external_dispatch": null,
  "silent_days": null,
@@ -7,7 +7,7 @@
  "window_days": 3,
  "daily": {
   "2026-11-15": {
-   "bot": 2
+   "bot": 10
   },
   "2026-11-14": {
    "bot": 7,
@@ -50,9 +50,6 @@
   },
   "2026-11-02": {
    "bot": 4
-  },
-  "2026-11-01": {
-   "bot": 7
   }
  }
 }
