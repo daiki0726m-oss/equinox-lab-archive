@@ -1,105 +1,10 @@
 {
-  "generated_at": "2026-11-09T11:13:10.813758",
+  "generated_at": "2026-11-16T10:52:56.688412",
   "period": {
-    "from": "2026-08-17",
-    "to": "2026-11-09"
+    "from": "2026-08-24",
+    "to": "2026-11-16"
   },
   "weekly": {
-    "2026-08-17": {
-      "by_tier": {
-        "S": {
-          "ワイド": {
-            "spend": 2000,
-            "return": 2340,
-            "hits": 3,
-            "races": 2,
-            "roi_pct": 117.0
-          },
-          "三連複": {
-            "spend": 2500,
-            "return": 7040,
-            "hits": 1,
-            "races": 1,
-            "roi_pct": 281.6
-          },
-          "単勝": {
-            "spend": 600,
-            "return": 0,
-            "hits": 0,
-            "races": 1,
-            "roi_pct": 0.0
-          },
-          "馬連": {
-            "spend": 100,
-            "return": 0,
-            "hits": 0,
-            "races": 1,
-            "roi_pct": 0.0
-          },
-          "複勝": {
-            "spend": 400,
-            "return": 480,
-            "hits": 2,
-            "races": 1,
-            "roi_pct": 120.0
-          },
-          "三連単": {
-            "spend": 100,
-            "return": 0,
-            "hits": 0,
-            "races": 1,
-            "roi_pct": 0.0
-          }
-        },
-        "A": {
-          "ワイド": {
-            "spend": 1500,
-            "return": 1520,
-            "hits": 4,
-            "races": 3,
-            "roi_pct": 101.3
-          }
-        }
-      },
-      "overall": {
-        "ワイド": {
-          "spend": 3500,
-          "return": 3860,
-          "hits": 7,
-          "roi_pct": 110.3
-        },
-        "三連複": {
-          "spend": 2500,
-          "return": 7040,
-          "hits": 1,
-          "roi_pct": 281.6
-        },
-        "単勝": {
-          "spend": 600,
-          "return": 0,
-          "hits": 0,
-          "roi_pct": 0.0
-        },
-        "馬連": {
-          "spend": 100,
-          "return": 0,
-          "hits": 0,
-          "roi_pct": 0.0
-        },
-        "複勝": {
-          "spend": 400,
-          "return": 480,
-          "hits": 2,
-          "roi_pct": 120.0
-        },
-        "三連単": {
-          "spend": 100,
-          "return": 0,
-          "hits": 0,
-          "roi_pct": 0.0
-        }
-      }
-    },
     "2026-08-24": {
       "by_tier": {
         "S": {
@@ -1189,38 +1094,144 @@
           "roi_pct": 115.7
         }
       }
+    },
+    "2026-11-09": {
+      "by_tier": {
+        "S": {
+          "三連複": {
+            "spend": 1800,
+            "return": 0,
+            "hits": 0,
+            "races": 2,
+            "roi_pct": 0.0
+          },
+          "ワイド": {
+            "spend": 1200,
+            "return": 1080,
+            "hits": 2,
+            "races": 2,
+            "roi_pct": 90.0
+          },
+          "単勝": {
+            "spend": 300,
+            "return": 0,
+            "hits": 0,
+            "races": 1,
+            "roi_pct": 0.0
+          },
+          "複勝": {
+            "spend": 100,
+            "return": 0,
+            "hits": 0,
+            "races": 1,
+            "roi_pct": 0.0
+          }
+        },
+        "A": {
+          "三連複": {
+            "spend": 6400,
+            "return": 940,
+            "hits": 1,
+            "races": 5,
+            "roi_pct": 14.7
+          },
+          "ワイド": {
+            "spend": 3000,
+            "return": 3960,
+            "hits": 3,
+            "races": 5,
+            "roi_pct": 132.0
+          },
+          "複勝": {
+            "spend": 300,
+            "return": 330,
+            "hits": 2,
+            "races": 1,
+            "roi_pct": 110.0
+          },
+          "単勝": {
+            "spend": 300,
+            "return": 510,
+            "hits": 1,
+            "races": 1,
+            "roi_pct": 170.0
+          }
+        },
+        "B": {
+          "三連複": {
+            "spend": 7400,
+            "return": 3100,
+            "hits": 2,
+            "races": 10,
+            "roi_pct": 41.9
+          },
+          "ワイド": {
+            "spend": 6000,
+            "return": 5520,
+            "hits": 10,
+            "races": 10,
+            "roi_pct": 92.0
+          }
+        }
+      },
+      "overall": {
+        "三連複": {
+          "spend": 15600,
+          "return": 4040,
+          "hits": 3,
+          "roi_pct": 25.9
+        },
+        "ワイド": {
+          "spend": 10200,
+          "return": 10560,
+          "hits": 15,
+          "roi_pct": 103.5
+        },
+        "単勝": {
+          "spend": 600,
+          "return": 510,
+          "hits": 1,
+          "roi_pct": 85.0
+        },
+        "複勝": {
+          "spend": 400,
+          "return": 330,
+          "hits": 2,
+          "roi_pct": 82.5
+        }
+      }
     }
   },
   "rolling_4w": {
-    "2026-08-17": {
+    "2026-08-24": {
       "ワイド": {
-        "spend": 3500,
-        "return": 3860,
-        "roi_pct": 110.3,
+        "spend": 6500,
+        "return": 5210,
+        "roi_pct": 80.2,
         "window_weeks": 1
       },
       "三連複": {
-        "spend": 2500,
-        "return": 7040,
-        "roi_pct": 281.6,
+        "spend": 2400,
+        "return": 2640,
+        "roi_pct": 110.0,
         "window_weeks": 1
       },
       "単勝": {
-        "spend": 600,
-        "return": 0,
-        "roi_pct": 0.0,
-        "window_weeks": 1
-      },
-      "馬連": {
-        "spend": 100,
+        "spend": 300,
         "return": 0,
         "roi_pct": 0.0,
         "window_weeks": 1
       },
       "複勝": {
         "spend": 400,
-        "return": 480,
-        "roi_pct": 120.0,
+        "return": 460,
+        "roi_pct": 115.0,
+        "window_weeks": 1
+      },
+      "馬連": {
+        "spend": 200,
+        "return": 0,
+        "roi_pct": 0.0,
         "window_weeks": 1
       },
       "三連単": {
@@ -1230,23 +1241,29 @@
         "window_weeks": 1
       }
     },
-    "2026-08-24": {
+    "2026-08-31": {
       "ワイド": {
-        "spend": 10000,
-        "return": 9070,
-        "roi_pct": 90.7,
+        "spend": 11900,
+        "return": 12970,
+        "roi_pct": 109.0,
         "window_weeks": 2
       },
       "三連複": {
-        "spend": 4900,
-        "return": 9680,
-        "roi_pct": 197.6,
+        "spend": 7900,
+        "return": 3360,
+        "roi_pct": 42.5,
         "window_weeks": 2
       },
       "単勝": {
-        "spend": 900,
-        "return": 0,
-        "roi_pct": 0.0,
+        "spend": 500,
+        "return": 380,
+        "roi_pct": 76.0,
+        "window_weeks": 2
+      },
+      "複勝": {
+        "spend": 600,
+        "return": 720,
+        "roi_pct": 120.0,
         "window_weeks": 2
       },
       "馬連": {
@@ -1255,93 +1272,49 @@
         "roi_pct": 0.0,
         "window_weeks": 2
       },
-      "複勝": {
-        "spend": 800,
-        "return": 940,
-        "roi_pct": 117.5,
-        "window_weeks": 2
-      },
       "三連単": {
-        "spend": 200,
+        "spend": 100,
         "return": 0,
         "roi_pct": 0.0,
         "window_weeks": 2
-      }
-    },
-    "2026-08-31": {
-      "ワイド": {
-        "spend": 15400,
-        "return": 16830,
-        "roi_pct": 109.3,
-        "window_weeks": 3
-      },
-      "三連複": {
-        "spend": 10400,
-        "return": 10400,
-        "roi_pct": 100.0,
-        "window_weeks": 3
-      },
-      "単勝": {
-        "spend": 1100,
-        "return": 380,
-        "roi_pct": 34.5,
-        "window_weeks": 3
-      },
-      "馬連": {
-        "spend": 400,
-        "return": 0,
-        "roi_pct": 0.0,
-        "window_weeks": 3
-      },
-      "複勝": {
-        "spend": 1000,
-        "return": 1200,
-        "roi_pct": 120.0,
-        "window_weeks": 3
-      },
-      "三連単": {
-        "spend": 200,
-        "return": 0,
-        "roi_pct": 0.0,
-        "window_weeks": 3
       }
     },
     "2026-09-07": {
       "ワイド": {
-        "spend": 21400,
-        "return": 24700,
-        "roi_pct": 115.4,
-        "window_weeks": 4
+        "spend": 17900,
+        "return": 20840,
+        "roi_pct": 116.4,
+        "window_weeks": 3
       },
       "三連複": {
-        "spend": 16700,
-        "return": 13780,
-        "roi_pct": 82.5,
-        "window_weeks": 4
+        "spend": 14200,
+        "return": 6740,
+        "roi_pct": 47.5,
+        "window_weeks": 3
       },
       "単勝": {
-        "spend": 1200,
+        "spend": 600,
         "return": 380,
-        "roi_pct": 31.7,
-        "window_weeks": 4
-      },
-      "馬連": {
-        "spend": 400,
-        "return": 0,
-        "roi_pct": 0.0,
-        "window_weeks": 4
+        "roi_pct": 63.3,
+        "window_weeks": 3
       },
       "複勝": {
-        "spend": 1000,
-        "return": 1200,
+        "spend": 600,
+        "return": 720,
         "roi_pct": 120.0,
-        "window_weeks": 4
+        "window_weeks": 3
       },
-      "三連単": {
-        "spend": 200,
+      "馬連": {
+        "spend": 300,
         "return": 0,
         "roi_pct": 0.0,
-        "window_weeks": 4
+        "window_weeks": 3
+      },
+      "三連単": {
+        "spend": 100,
+        "return": 0,
+        "roi_pct": 0.0,
+        "window_weeks": 3
       }
     },
     "2026-09-14": {
@@ -1605,6 +1578,38 @@
         "roi_pct": 0.0,
         "window_weeks": 4
       }
+    },
+    "2026-11-09": {
+      "ワイド": {
+        "spend": 34000,
+        "return": 37810,
+        "roi_pct": 111.2,
+        "window_weeks": 4
+      },
+      "三連複": {
+        "spend": 56800,
+        "return": 37800,
+        "roi_pct": 66.5,
+        "window_weeks": 4
+      },
+      "単勝": {
+        "spend": 2300,
+        "return": 2240,
+        "roi_pct": 97.4,
+        "window_weeks": 4
+      },
+      "複勝": {
+        "spend": 1900,
+        "return": 1800,
+        "roi_pct": 94.7,
+        "window_weeks": 4
+      },
+      "馬連": {
+        "spend": 200,
+        "return": 0,
+        "roi_pct": 0.0,
+        "window_weeks": 4
+      }
     }
   },
   "anomalies": [
@@ -1618,21 +1623,21 @@
   ],
   "segments": {
     "trio_focus_band": {
-      "spend": 100100,
-      "return": 83020,
+      "spend": 106000,
+      "return": 76920,
       "hits": 24,
-      "races": 59,
+      "races": 63,
       "kind": "funded",
-      "roi_pct": 82.9,
-      "flag": ""
+      "roi_pct": 72.6,
+      "flag": "🔻 要降格レビュー (n>=50 & ROI<80%)"
     },
     "W1_S_2勝_中距離_単勝": {
-      "spend": 400,
-      "return": 220,
-      "hits": 1,
-      "races": 4,
+      "spend": 500,
+      "return": 490,
+      "hits": 2,
+      "races": 5,
       "kind": "observation",
-      "roi_pct": 55.0,
+      "roi_pct": 98.0,
       "flag": ""
     },
     "W2_函館ダート_単勝": {
@@ -1644,25 +1649,25 @@
     },
     "chu_mark_複勝": {
       "n": 765,
-      "top3_hits": 93,
-      "top3_rate_pct": 12.2
+      "top3_hits": 88,
+      "top3_rate_pct": 11.5
     },
     "chu_単勝_7-20倍": {
-      "spend": 9300,
+      "spend": 9100,
       "return": 3860,
       "hits": 2,
-      "races": 93,
+      "races": 91,
       "kind": "observation",
-      "roi_pct": 41.5,
+      "roi_pct": 42.4,
       "flag": ""
     },
     "chu_単勝_20-50倍": {
-      "spend": 20600,
-      "return": 9500,
-      "hits": 3,
-      "races": 206,
+      "spend": 21000,
+      "return": 11730,
+      "hits": 4,
+      "races": 210,
       "kind": "observation",
-      "roi_pct": 46.1,
+      "roi_pct": 55.9,
       "flag": ""
     }
   },
@@ -1675,8 +1680,6 @@
   },
   "population_counts": {
     "days": [
-      "20260822",
-      "20260823",
       "20260829",
       "20260830",
       "20260905",
@@ -1701,15 +1704,17 @@
       "20261031",
       "20261101",
       "20261107",
-      "20261108"
+      "20261108",
+      "20261114",
+      "20261115"
     ],
     "races_with_results": 768,
-    "races_funded": 144,
-    "posted_races": 304,
-    "band_funded": 59,
-    "band_by_posted_odds": 62,
-    "band_overlap": 43,
-    "band_by_posted_odds_unfunded": 19,
+    "races_funded": 156,
+    "posted_races": 305,
+    "band_funded": 63,
+    "band_by_posted_odds": 63,
+    "band_overlap": 46,
+    "band_by_posted_odds_unfunded": 17,
     "missing_posted_odds": 0
   }
 }

@@ -8,6 +8,20 @@
    "roi_generated_at": "2026-11-09T11:13:10.813758",
    "population": "169-funded-bets-v1",
    "flagged": {}
+  },
+  "2026-W47": {
+   "recorded_at": "2026-11-16T19:52:58+09:00",
+   "roi_generated_at": "2026-11-16T10:52:56.688412",
+   "population": "169-funded-bets-v1",
+   "flagged": {
+    "trio_focus_band": {
+     "flag": "🔻 要降格レビュー (n>=50 & ROI<80%)",
+     "races": 63,
+     "spend": 106000,
+     "return": 76920,
+     "roi_pct": 72.6
+    }
+   }
   }
  },
  "notified_streaks": {}
