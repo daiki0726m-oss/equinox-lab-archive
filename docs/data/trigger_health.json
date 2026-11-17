@@ -1,11 +1,17 @@
 {
- "generated_at": "2026-11-16T08:42:43.120245+09:00",
+ "generated_at": "2026-11-17T11:45:27.530297+09:00",
  "external_layer_ok": false,
  "last_external_dispatch": null,
  "silent_days": null,
  "manual_dispatches_ignored": 11,
  "window_days": 3,
  "daily": {
+  "2026-11-17": {
+   "bot": 1
+  },
+  "2026-11-16": {
+   "bot": 4
+  },
   "2026-11-15": {
    "bot": 10
   },
@@ -46,10 +52,7 @@
    "bot": 4
   },
   "2026-11-03": {
-   "bot": 3
-  },
-  "2026-11-02": {
-   "bot": 4
+   "bot": 2
   }
  }
 }
