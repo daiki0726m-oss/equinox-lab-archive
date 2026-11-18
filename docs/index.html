@@ -959,6 +959,7 @@ body {
   <div class="loading-progress" id="loadingProgress"></div>
 </div>
 
+<script src="bet_notation.js"></script>
 <script>
 // ─── State Management ───
 const state = {
@@ -1601,33 +1602,45 @@ function renderPredTab(race) {
   } else if (bets.length === 0) {
     html += '<div class="no-bets">この券種の推奨はありません</div>';
   } else {
+    // #176: 1点ずつでなく、まとめた表記で出す (例 2-4 / 2-5 → 2-4,5)。表記は docs/bet_notation.js。
+    // まとめるのは同じ金額・同じ扱い (主力か) の点だけ。的中の判定・払戻は従来どおり1点ずつ。
     let totalIn = 0, totalOut = 0;
-    bets.forEach(b => {
-      const result = race.has_results ? checkBetHit(b, race) : { hit: false, payout: 0, source: 'none' };
-      const isHit = result.hit;
-      const hitPayout = result.payout;
-      const isEstimate = result.source === 'estimate';
+    const _groups = (window.BetNotation ? window.BetNotation.groupBetLines(bets, bt)
+      : bets.map(x => ({ text: x.detail || x.bet_detail || '', points: 1, amount: x.amount, honor: !!x.honor, lines: [x] })));
+    _groups.forEach(g => {
+      const res = g.lines.map(x => race.has_results ? checkBetHit(x, race) : { hit: false, payout: 0, source: 'none' });
+      const hits = g.lines.filter((x, i) => res[i].hit);
+      const isHit = hits.length > 0;
+      const hitPayout = res.reduce((s, r) => s + (r.hit ? r.payout : 0), 0);
+      const isEstimate = res.some(r => r.hit && r.source === 'estimate');
       const cls = race.has_results ? (isHit ? 'hit' : 'miss') : '';
-      totalIn += b.amount;
+      const amountSum = g.lines.reduce((s, x) => s + (x.amount || 0), 0);
+      totalIn += amountSum;
       if (isHit) totalOut += hitPayout;
 
       const payoutLabel = (isHit && hitPayout > 0)   // #169: 0円の参考買い目は払戻を出さない
         ? (isEstimate ? `→ 約¥${hitPayout.toLocaleString()} (概算)` : `→ ¥${hitPayout.toLocaleString()}`)
         : '';
-      const hitLabel = isHit ? '✅ 的中' : '❌ 不的中';
-
+      const hitWhich = (isHit && g.points > 1) ? ' ' + hits.map(x => x.detail || x.bet_detail || '').join(' / ') : '';
+      const hitLabel = isHit ? `✅ 的中${hitWhich}` : '❌ 不的中';
       // 主力買い目 (honor=true) は強調表示
-      const honorClass = b.honor ? ' bet-honor' : '';
-      const honorLabel = b.honor ? '<span class="honor-tag">⭐主力</span>' : '';
+      const honorClass = g.honor ? ' bet-honor' : '';
+      const honorLabel = g.honor ? '<span class="honor-tag">⭐主力</span>' : '';
+      const one = g.points === 1 ? g.lines[0] : null;
+      const amountHtml = g.amount > 0
+        ? (g.points > 1
+            ? `<span style="font-size:10px;color:var(--text-muted)">各¥${g.amount.toLocaleString()} × ${g.points}点</span><br>¥${amountSum.toLocaleString()}`
+            : '¥' + g.amount.toLocaleString())
+        : `<span style="font-size:10px;color:var(--text-muted)">見送り(参考)${g.points > 1 ? ' ' + g.points + '点' : ''}</span>`;
       html += `<div class="bet-card ${cls}${honorClass}">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span class="bet-type-label" style="background:${BET_COLORS[bt]}">${bt}</span>
           ${honorLabel}
-          <span class="bet-detail-text">${b.detail || b.bet_detail || ''}</span>
-          ${b.horse_name ? `<span style="font-size:10px;color:var(--text-muted)">${b.horse_name}</span>` : ''}
+          <span class="bet-detail-text">${g.text}</span>
+          ${one && one.horse_name ? `<span style="font-size:10px;color:var(--text-muted)">${one.horse_name}</span>` : ''}
         </div>
         <div style="text-align:right;">
-          <div class="bet-amount">${b.amount > 0 ? '¥' + b.amount.toLocaleString() : '<span style="font-size:10px;color:var(--text-muted)">見送り(参考)</span>'}</div>
+          <div class="bet-amount">${amountHtml}</div>
           ${race.has_results ? `<span class="bet-hit-label ${isHit?'hit':'miss'}">${hitLabel}</span>` : ''}
           ${payoutLabel ? `<div class="bet-payout">${payoutLabel}</div>` : ''}
         </div>
