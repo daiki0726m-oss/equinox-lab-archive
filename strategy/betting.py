@@ -558,7 +558,10 @@ class BettingStrategy:
                            min(pair[1].get("pred_top3", 0.1) * 3, 0.55) * 0.5
                 est_prob = min(est_prob, 0.25)
                 names = f"{center_name}-{pair[0].get('horse_name','')}-{pair[1].get('horse_name','')}"
-                # trio_focus band 中は2倍額 (帯内 trio ROI 200%、#95)
+                # trio_focus band 中は2倍額。⚠️ #95 の「帯内 trio ROI 200%/165%」は撤回済みの数字
+                # (#112・#139 で 89〜100% に下方修正)。#176 の監査 (回収型の◎、予想時点オッズの再現
+                # 696R・学習外 X) でも band は他の投資レースと区別できず、2倍額の根拠は未確立のまま維持
+                # (1倍にしても回収率はほぼ同じで、band 1レースあたりの損失だけ 403円→240円)
                 add("三連複", f"{nums[0]}-{nums[1]}-{nums[2]}", nums, est_odds, est_prob, names,
                     amount=(amt * 2 if trio_focus else None))
 
