@@ -28,6 +28,17 @@ def _bet_sig(bet_type, horse_numbers):
     return (bet_type, tuple(hns) if bet_type == "三連単" else tuple(sorted(hns)))
 
 
+def band_trio_mult():
+    """#177: trio_focus band の三連複の単価の倍率 (config の BET_BAND_TRIO_MULT、既定 1 = 等額)。
+    #95 で2倍にしたが、根拠の「帯内 trio ROI 200%」は撤回済みで、#176 の監査でも band は他の投資
+    レースと区別できなかった。ユーザー判断 (2026-11-18「戻す」) で等額に戻した。2 にすると旧挙動。"""
+    try:
+        m = flags.as_float("BET_BAND_TRIO_MULT", "1")
+    except Exception:
+        m = 1.0
+    return m if m >= 1 else 1.0
+
+
 class BettingStrategy:
     """
     馬券戦略 (2026-05-27 entertainment モード)
@@ -121,6 +132,7 @@ class BettingStrategy:
         ROI 200% (n=100、5月182%/6月205%、単日除外でも161-163%) の検証済み利益層。
         ワイド◎ながしも 119%。一方この帯の馬連◎ながしは 83% の損失層。
         → 該当時: 馬連 honor を生成せず、三連複 honor を2倍額に、ワイドは維持。
+        (#177: 2倍額は撤回済みの数字が根拠だったので、既定は等額 — BET_BAND_TRIO_MULT)
         実オッズがある場合のみ発火 (推定オッズは自己予測由来で循環参照になるため)。
         この alpha は印相手 (穴馬スコア系) に由来 — 相手を人気順に替えると 200%→108%
         に消えることを counterfactual で確認済み。印ロジック変更時は要再検証。
@@ -321,9 +333,10 @@ class BettingStrategy:
         実オッズがあり BET_STRUCTURE_ADAPTIVE=1 なら構造を切り替える (#113/#150d):
           - G    (◎1倍台): 三連複2頭軸(◎+☆)→4点 + ワイド6点。**金額は乗らない** (#152)
           - D    (◎2倍台×11頭+、band不成立時): 三連単F 24点 + ワイド6点。**金額は乗らない** (#169)
-          - band (◎2倍台×S/A/B×平場、11頭+): 三連複◎軸 ☆○▲△△ 10点×2倍額 + ワイド6点
+          - band (◎2倍台×S/A/B×平場、11頭+): 三連複◎軸 ☆○▲△△ 10点 (単価は BET_BAND_TRIO_MULT 倍、
+                 既定1 = 等額 #177) + ワイド6点
           - A    (上記以外の実オッズ有り / band の10頭以下): 三連複◎軸×LGB複勝上位4頭 6点
-                 (band の10頭以下は 6点×2倍額) + ワイド6点。相手は印でなくモデル順 (#121)
+                 (band の10頭以下も同じ相手で 6点、単価は band と同じ倍率) + ワイド6点。相手は印でなくモデル順 (#121)
           - 実オッズ無し (木金の事前予測): 馬連6点+ワイド4点 で予算1,000円の上限に当たる
         構造が決まったレースは「設計どおりの全点」を買う (#169: 予算は実際の点数から決める)。
 
@@ -348,7 +361,7 @@ class BettingStrategy:
         # 計画した点の合計から予算を決める (相手やワイドの点数が変わっても追従する)。
         planned = []
 
-        def add(t, detail, hns, odds, prob, name, amount=None):
+        def add(t, detail, hns, odds, prob, name, amount=None, band=False):
             amt_i = amount or amt
             # 三連単は着順が意味を持つので sig を順序保存 (sorted だと別順序が同一視され欠落)
             sig = _bet_sig(t, hns)
@@ -367,6 +380,9 @@ class BettingStrategy:
                 "amount": amt_i, "odds": round(odds, 1),
                 "ev": round(ev_estimated, 2), "prob": round(prob, 3),
                 "horse_name": name, "honor": True,
+                # #177: band の三連複の印。単価で band を見分けていた週次採点 (#152) が、等額に戻すと
+                # band を構造A に混ぜてしまうので、買い目自体に印を残す
+                **({"band": True} if band else {}),
             })
 
         # 軸 = 表示上の ◎ (#95: 旧 pred_win 1位は印 v5 の ◎ と乖離していた)
@@ -519,7 +535,7 @@ class BettingStrategy:
                 pairs = [(partners[0], x) for x in partners[1:5]]
             elif structure == 'A':
                 # ⚠️ #169: band の10頭以下もこの分岐に来る (構造A が band より先に判定されるため)。
-                # その時は相手が「☆○▲△△ 10点」でなく「LGB複勝上位4頭 6点×2倍額」になる。
+                # その時は相手が「☆○▲△△ 10点」でなく「LGB複勝上位4頭 6点」になる (単価は band の倍率、#177 以降は等額)。
                 # どちらに統一するかは製品判断として未決 (docs/BETTING_SPEC.md)。
                 #
                 # #121 (2026-08-24): A の相手は「印4頭」でなく「モデル複勝率上位4頭」。
@@ -558,12 +574,14 @@ class BettingStrategy:
                            min(pair[1].get("pred_top3", 0.1) * 3, 0.55) * 0.5
                 est_prob = min(est_prob, 0.25)
                 names = f"{center_name}-{pair[0].get('horse_name','')}-{pair[1].get('horse_name','')}"
-                # trio_focus band 中は2倍額。⚠️ #95 の「帯内 trio ROI 200%/165%」は撤回済みの数字
-                # (#112・#139 で 89〜100% に下方修正)。#176 の監査 (回収型の◎、予想時点オッズの再現
-                # 696R・学習外 X) でも band は他の投資レースと区別できず、2倍額の根拠は未確立のまま維持
-                # (1倍にしても回収率はほぼ同じで、band 1レースあたりの損失だけ 403円→240円)
+                # #177: band の三連複の単価は BET_BAND_TRIO_MULT 倍 (既定 1 = 等額)。#95 の2倍額は
+                # 「帯内 trio ROI 200%/165%」が根拠だったが撤回済み (#112・#139 で 89〜100%)。#176 の
+                # 監査 (回収型の◎、予想時点オッズの再現 696R・学習外 X) でも band は他の投資レースと
+                # 区別できず、ユーザー判断で等額に戻した (回収率はほぼ同じで、band 1レースの損失が減る)
+                _m = band_trio_mult()
                 add("三連複", f"{nums[0]}-{nums[1]}-{nums[2]}", nums, est_odds, est_prob, names,
-                    amount=(amt * 2 if trio_focus else None))
+                    amount=(int(round(amt * _m / 100.0)) * 100 if trio_focus and _m != 1 else None),
+                    band=trio_focus)
 
         # ─── #113 D: 三連単フォーメーション 1着{◎☆}/2着{◎☆○▲}/3着{◎+相手} ───
         # 点数 (#169 実測): 相手6頭 (☆○▲△△注) のとき BET_D_NO_CHU=1 で 2×3×4=24点、
@@ -688,8 +706,12 @@ class BettingStrategy:
 
         # ── trio-focus band 判定 (#95 2026-07-02) ──
         band = self.trio_focus_band(predictions, confidence, race_info=race_info)
-        if band:
-            print("  🎯 trio-focus band (◎2.0-2.9倍×S/A/B): 三連複◎軸2倍額 / 馬連なし / ワイド維持")
+        if band and band_trio_mult() == 1:
+            # #177: 等額の band は EV層の上限も広げない (= 構造A と同じ扱い)。広げると、三連複を
+            # 等額に戻して浮いた予算が EV層 (単勝・複勝・馬連) に流れ、別の買い目に資金が移る
+            print("  🎯 trio-focus band (◎2.0-2.9倍×S/A/B): 三連複◎軸 (等額) / 馬連なし / ワイド維持")
+        elif band:
+            print(f"  🎯 trio-focus band (◎2.0-2.9倍×S/A/B): 三連複◎軸{band_trio_mult():g}倍額 / 馬連なし / ワイド維持")
             # 旧来は _honor_bets 内部の band 予算 (25×line_amount) と揃えるための行。
             # #169 以降 honor の全点確保は _honor_bets が実点数から決めるので、ここは
             # **EV層の上限**としてだけ働く: band の11頭以上は honor が 26点分を使い切り EV層は0、

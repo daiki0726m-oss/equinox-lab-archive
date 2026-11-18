@@ -40,6 +40,7 @@ all_bets_json はどこまで信用できるか
 構造の判定に金額署名を使う理由
 ------------------------------
 band (trio_focus #95) は betting.py:501 で三連複の**単価だけを2倍**にし、点数は増やさない。
+(#177: 2026-11-18 から既定は等額。band は買い目の印 band=True で見分ける)
 点数で分類すると band が A (6点) に埋没する。実際それで band 12R (ROI 84.0%) が
 通常A 37R (51.5%) と混ざり「A 65.0%」という中間値になっていた。
 
@@ -167,7 +168,8 @@ def load_bets(day):
                         # 単勝/複勝/馬連 と一部の三連複は EV フィルタ由来の別レイヤーで、
                         # 混ぜると「◎軸ながし」の共通軸が崩れて構造判定を誤る。
                         acc.append({'nums': nums, 'amount': int(b.get('amount') or 0),
-                                    'honor': bool(b.get('honor'))})
+                                    'honor': bool(b.get('honor')),
+                                    'band': bool(b.get('band'))})    # #177: band の三連複の印
                 if acc:
                     lines[bt] = acc
             out[str(r['race_id'])] = lines
@@ -204,8 +206,10 @@ def classify_structure(lines):
     wide = src.get('ワイド') or []
 
     tu, wu = _unit(trio), _unit(wide)
-    if trio and wu > 0 and tu >= 2 * wu:
-        return 'band:三連複◎軸(2倍額)'
+    # #177: band は買い目の印 (band=True) で見分ける。等額に戻した後は単価では見分けられない
+    # (単価で見ると band が構造A に混ざる = #152 の取り違えの再発)。印の無い旧データは単価で見る
+    if trio and (any(l.get('band') for l in trio) or (wu > 0 and tu >= 2 * wu)):
+        return 'band:三連複◎軸(2倍額)' if (wu > 0 and tu >= 2 * wu) else 'band:三連複◎軸(等額)'
     if tri and not trio:
         return f'D:三連単F({len(tri)}点)'
     if len(trio) >= 2:

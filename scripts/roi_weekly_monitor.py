@@ -69,7 +69,8 @@ def collect_weekly_stats(conn, weeks_back, data_dir=None, today=None):
     ------------
     - 買い目: docs/data/predictions_YYYYMMDD.json の all_bets のうち amount>0 のライン
       (#152 の weekly_scorecard と同じ正本・同じ読み方。should_bet=0 のレースは全ライン0)。
-    - band: 本番が実際に「三連複を2倍額」で張ったレース (金額署名、weekly_scorecard と同じ判定)。
+    - band: 本番が実際に band (trio_focus) で張ったレース (weekly_scorecard と同じ判定。
+      #177 以降は等額で、買い目の印 band=True で見分ける。旧データは三連複の2倍額の金額署名)。
       band の判断は予測時点のオッズで行われており、その結果は金額に残っている。投稿時点の
       オッズによる区分は投稿したレースにしか無いので、照合用に population に並べて出す。
     - 注のオッズ帯 / 注の複勝率: posted_marks の凍結印と odds_win_at_post (投稿時点)。
@@ -149,7 +150,7 @@ def collect_weekly_stats(conn, weeks_back, data_dir=None, today=None):
                 bk["return"] += round(t["ret"])
                 bk["hits"] += t["hits"]
 
-            # ── (1) trio-focus band: 本番が三連複を2倍額で張ったレース ──
+            # ── (1) trio-focus band: 本番が band で張ったレース (#177 以降は等額) ──
             struct = classify_structure(lines)
             funded_band = struct.startswith("band:") and sc["spend"] > 0
             if funded_band:
@@ -320,7 +321,7 @@ def format_markdown(report):
     pop = report.get('population_counts') or {}
     if pop:
         lines.append(f"母集団 (#169): 本番が金額を乗せた買い目 — 確定 {pop.get('races_with_results', 0)}R 中 "
-                     f"投資 {pop.get('races_funded', 0)}R / band は本番が2倍額で張った "
+                     f"投資 {pop.get('races_funded', 0)}R / band は本番が band で張った "
                      f"{pop.get('band_funded', 0)}R (投稿レースを投稿時点のオッズで区分すると "
                      f"{pop.get('band_by_posted_odds', 0)}R、うち一致 {pop.get('band_overlap', 0)}R)")
     lines.append("")
@@ -448,7 +449,7 @@ def main():
         "population": {
             "version": POPULATION_VERSION,
             "bets": "docs/data/predictions_YYYYMMDD.json の all_bets (amount>0 = 本番が金額を乗せたライン)",
-            "band": "本番が三連複を2倍額で張ったレース (金額署名 = weekly_scorecard.classify_structure)",
+            "band": "本番が band で張ったレース (weekly_scorecard.classify_structure。#177 以降は等額・印で判定)",
             "chu_odds_band": "posted_marks の注と odds_win_at_post (投稿時点のオッズ)",
         },
         "population_counts": population,

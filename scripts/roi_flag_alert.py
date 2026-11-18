@@ -44,7 +44,7 @@ KEEP_WEEKS = 26
 
 # 区分の意味 (Issue を読む人向け。定義は scripts/roi_weekly_monitor.py の segments)
 SEGMENT_DESC = {
-    "trio_focus_band": "◎2.0〜2.9倍 × 平場のレースで三連複を2倍額にする買い方 (#95)",
+    "trio_focus_band": "◎2.0〜2.9倍 × 平場のレースで三連複◎軸を主力にする買い方 (#95。2倍額は #177 で等額に戻した)",
     "W1_S_2勝_中距離_単勝": "walk-forward の whitelist ① 単勝 (#31/#32)",
     "W2_函館ダート_単勝": "walk-forward の whitelist ② 単勝 (#31/#32)",
     "chu_単勝_7-20倍": "注 (妙味の穴) の単勝 7〜20倍帯 (#100、観察用・賭けない)",

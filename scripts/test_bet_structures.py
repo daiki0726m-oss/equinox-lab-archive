@@ -23,6 +23,7 @@ os.environ["BET_D_NO_CHU"] = "1"
 os.environ["BET_GATE_FIXED"] = "1"       # 投資ゲートの閾値を基準表に依存させない
 os.environ.pop("BET_KEEP_D", None)
 os.environ.pop("CONFIDENCE_SIZING", None)
+os.environ["BET_BAND_TRIO_MULT"] = "1"   # #177: 本番の既定 (等額)
 
 from strategy.betting import BettingStrategy  # noqa: E402
 
@@ -95,25 +96,37 @@ pool = sorted({h for b in honor if b["type"] == "三連複" for h in b["horse_nu
 check("A 相手=LGB複勝上位4頭 (無印8番を含む)", pool, [2, 3, 4, 8])
 check("A 6点 (lgb_swap)", cnt.get("三連複"), 6)
 
-# ── 2. band 11頭以上 (◎2倍台×A×平場): ワイド6 + 三連複 ☆○▲△△ 10点×2倍 = 2,600円 ──
+# ── 2. band 11頭以上 (◎2倍台×A×平場): ワイド6 + 三連複 ☆○▲△△ 10点 (等額 #177) = 1,600円 ──
 res, honor, cnt = run(make_preds(12, 2.5))
 check("band11+ 判定", res["trio_focus_band"], True)
 check("band11+ 点数", cnt, {"ワイド": 6, "三連複": 10})
-check("band11+ 単価", (unit(honor, "ワイド"), unit(honor, "三連複")), ([100], [200]))
-check("band11+ 合計", res["total_amount"], 2600)
+check("band11+ 単価 (等額)", (unit(honor, "ワイド"), unit(honor, "三連複")), ([100], [100]))
+check("band11+ 合計", res["total_amount"], 1600)
+check("band11+ 三連複に band の印", all(b.get("band") for b in honor if b["type"] == "三連複"), True)
+check("band11+ ワイドには band の印なし", any(b.get("band") for b in honor if b["type"] == "ワイド"), False)
 want_trio = sorted(tuple(sorted((1, a, b))) for a, b in combinations([6, 2, 3, 4, 5], 2))
 got_trio = sorted(tuple(sorted(b["horse_numbers"])) for b in honor if b["type"] == "三連複")
 check("band11+ 三連複の組 (◎軸 ☆○▲△△ 5頭流し)", got_trio, want_trio)
 check("band11+ 馬連なし", "馬連" in cnt, False)
-check("band11+ EV層なし (honor が予算を使い切る)", len(res["bets"]) - len(honor), 0)
+check("band11+ EV層なし (等額でも浮いた予算を EV層に回さない #177)", len(res["bets"]) - len(honor), 0)
 
-# ── 3. band 10頭以下: 構造A の分岐が先 → LGB上位4頭 6点×2倍 (現状仕様を固定) ──
+# ── 3. band 10頭以下: 構造A の分岐が先 → LGB上位4頭 6点 (等額) ──
 res, honor, cnt = run(make_preds(10, 2.5))
 check("band10- 判定", res["trio_focus_band"], True)
 check("band10- 点数", (cnt.get("ワイド"), cnt.get("三連複")), (6, 6))
-check("band10- 単価", unit(honor, "三連複"), [200])
-check("band10- honor合計", sum(b["amount"] for b in honor), 1800)
-check("band10- 予算の上限 2,500円", res["budget"], 2500)
+check("band10- 単価 (等額)", unit(honor, "三連複"), [100])
+check("band10- honor合計", sum(b["amount"] for b in honor), 1200)
+check("band10- 予算の上限は honor の合計 (EV層へ回さない)", res["budget"], 1200)
+
+# ── 3b. #177: BET_BAND_TRIO_MULT=2 で旧挙動 (2倍額・予算 2,500円) に戻る ──
+os.environ["BET_BAND_TRIO_MULT"] = "2"
+res, honor, cnt = run(make_preds(12, 2.5))
+check("mult=2 band11+ 単価", unit(honor, "三連複"), [200])
+check("mult=2 band11+ 合計", res["total_amount"], 2600)
+res, honor, cnt = run(make_preds(10, 2.5))
+check("mult=2 band10- honor合計", sum(b["amount"] for b in honor), 1800)
+check("mult=2 band10- 予算の上限 2,500円", res["budget"], 2500)
+os.environ["BET_BAND_TRIO_MULT"] = "1"
 
 # ── 4. 構造D (◎2倍台×11頭以上で band 不成立 = 未勝利): 三連単F 24点 + ワイド6 ──
 res, honor, cnt = run(make_preds(12, 2.5), race_name="2歳未勝利")
@@ -174,9 +187,9 @@ check("KEEP_D=0 D→A 点数", cnt, {"ワイド": 6, "三連複": 6})
 res, honor, cnt = run(make_preds(12, 2.5))
 check("KEEP_D=0 band11+ 判定は band のまま", res["trio_focus_band"], True)
 check("KEEP_D=0 band11+ 三連複は LGB上位4頭 6点", cnt, {"ワイド": 6, "三連複": 6})
-check("KEEP_D=0 band11+ 三連複は2倍額", unit(honor, "三連複"), [200])
-check("KEEP_D=0 band11+ honor合計", sum(b["amount"] for b in honor), 1800)
-check("KEEP_D=0 band11+ 予算の上限 2,500円 (残りが EV層へ)", res["budget"], 2500)
+check("KEEP_D=0 band11+ 三連複は等額 (#177)", unit(honor, "三連複"), [100])
+check("KEEP_D=0 band11+ honor合計", sum(b["amount"] for b in honor), 1200)
+check("KEEP_D=0 band11+ 予算の上限は honor の合計", res["budget"], 1200)
 os.environ.pop("BET_KEEP_D")
 
 if FAILS:
