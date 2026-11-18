@@ -825,6 +825,8 @@ def _fetch_predictions_from_pages(date_str):
                         # #169: 点数表の内訳と同じ指数 (V2d) を Threads の「スピード指数」に渡す。
                         # キーがある時だけ渡す (無い = 内訳も旧指数 → si_avg を使う)
                         **{k: h[k] for k in ('si_avg_v', 'si_latest_v') if k in h},
+                        # #175: 影の印と印に使った点数表 (この経路で投稿した日も posted_marks に凍結するため)
+                        **{k: h[k] for k in ('mark_shadow', 'sc_model') if k in h},
                         'jockey_name': h.get('jockey_name', ''),
                     })
 
@@ -1001,6 +1003,7 @@ def cmd_predict(args):
     # 旧実装は結果側が cache/JSON の「現在の印」を読み直すため、日中に cache が
     # 再生成されると朝の予想と別の印で採点される事故が起きた (6/28 函館記念で実発生)。
     _posted_marks = {}
+    _posted_shadow = {}     # #175: 影の印 (サイドカーの "shadow" キー。既存の読み手は "races" だけ読む)
     try:
         from volatility import compute_race_upset_history as _upset_hist
     except Exception:
@@ -1143,6 +1146,14 @@ def cmd_predict(args):
                  'popularity_at_post': _p.get('popularity', 0)}
                 for _p in marked_list          # #143: △2頭を両方記録
             ]
+            # #175: 影の印 (印に使わなかった方の点数表で選んだ5頭) も投稿時点で凍結する。
+            # 毎週の比較 (scorecard_shadow_report) が、投稿したレースでも同じ時点の印で並べられるように
+            _shadow = [{'mark': _p.get('mark_shadow'), 'horse_number': _p.get('horse_number', 0)}
+                       for _p in preds if _p.get('mark_shadow')]
+            if _shadow:
+                _posted_shadow[rid] = {'sc_model': next((_p.get('sc_model') for _p in preds
+                                                         if _p.get('sc_model')), ''),
+                                       'marks': _shadow}
 
         bet_tweets.append(t)
 
@@ -1295,7 +1306,9 @@ def cmd_predict(args):
                     if r.get('race_id') and r.get('pc_created_at')}
             with open(_sc_path, "w", encoding="utf-8") as _f:
                 json.dump({"date": date_str, "posted_at": _ts, "races": _sidecar,
-                           "pred_created_at": _pca},
+                           "pred_created_at": _pca,
+                           "shadow": {r.get('race_id'): _posted_shadow[r.get('race_id')]
+                                      for r in target_races if r.get('race_id') in _posted_shadow}},
                           _f, ensure_ascii=False, indent=1)
             print(f"📌 サイドカー保存: {_sc_path} (clobber耐性の正本)")
             # #114: 投稿本文の全文も記録 — 「⚡/穴注意が実際に配信されたか」を後から

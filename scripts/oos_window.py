@@ -76,12 +76,19 @@ def scorecard_boundary(path=None):
 
     pkl が読めない時は例外にする — 黙って None を返すと rank 系の境界だけで
     楽観的な窓を返してしまう (#157 の失敗そのもの)。"""
-    p = path or _SCORECARD
-    if not os.path.exists(p):
-        return None
-    with open(p, "rb") as f:
-        m = pickle.load(f)
-    ds = list(_scorecard_dates(m).values())
+    if path:
+        paths = [path]
+    else:
+        # #175: 点数表は2つ (scorecard.pkl / scorecard_roi.pkl)。印に使う方は flag で変わり、
+        # 影の方も毎週の比較に使うので、両方が見たデータの遅い方を境界にする
+        paths = [_SCORECARD, os.path.join(_MODELS, "scorecard_roi.pkl")]
+    ds = []
+    for p in paths:
+        if not os.path.exists(p):
+            continue
+        with open(p, "rb") as f:
+            m = pickle.load(f)
+        ds += list(_scorecard_dates(m).values())
     return max(ds) if ds else None
 
 
@@ -168,15 +175,19 @@ def describe(scorecard_path=None, db_path=None):
         "    ⚠️ rank系の窓 (検証区間) は early stopping と校正器の当てはめに使用済み — 厳密な学習外ではない",
     ]
     if sc:
-        p = scorecard_path or _SCORECARD
-        with open(p, "rb") as f:
-            m = pickle.load(f)
-        lines.append(f"  点数表 (印 ◎○▲△△ を決める) の境界: race_date <= {sc}"
-                     f" — 区分点の学習 {m.get('pts_fit_from', '')}〜{m.get('pts_fit_until') or m.get('train_until', '?')}"
-                     + (f" / 連続項目の当てはめ {m.get('lin_fit_from', '?')}〜{m.get('lin_fit_until')}"
-                        if m.get("lin_fit_until") else "")
-                     + (f" / V2d 基準表 〜{(m.get('si_variant') or {}).get('cutoff')}"
-                        if (m.get("si_variant") or {}).get("cutoff") else ""))
+        # #175: 点数表は2つ (scorecard.pkl / scorecard_roi.pkl)。境界は両方の遅い方なので、両方の窓を出す
+        _paths = [scorecard_path] if scorecard_path else [
+            p for p in (_SCORECARD, os.path.join(_MODELS, "scorecard_roi.pkl")) if os.path.exists(p)]
+        for p in _paths:
+            with open(p, "rb") as f:
+                m = pickle.load(f)
+            _b = max(_scorecard_dates(m).values()) if _scorecard_dates(m) else "?"
+            lines.append(f"  点数表 {os.path.basename(p)} (印 ◎○▲△△ を決める候補) の境界: race_date <= {_b}"
+                         f" — 区分点の学習 {m.get('pts_fit_from', '')}〜{m.get('pts_fit_until') or m.get('train_until', '?')}"
+                         + (f" / 連続項目の当てはめ {m.get('lin_fit_from', '?')}〜{m.get('lin_fit_until')}"
+                            if m.get("lin_fit_until") else "")
+                         + (f" / V2d 基準表 〜{(m.get('si_variant') or {}).get('cutoff')}"
+                            if (m.get("si_variant") or {}).get("cutoff") else ""))
         which = "点数表" if _next_day(sc) >= _next_day(meta["train_max_date"]) else "rank系"
         lines.append(f"  → 既定の窓は遅い方 ({which}) の翌日")
     else:

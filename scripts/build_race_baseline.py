@@ -673,7 +673,123 @@ def _calibrate_after_adjust(samples, th0):
     return th
 
 
-def build_confidence_thresholds(conn):
+CONF_SAMPLE_N = 400
+
+
+def _live_scorecard_name():
+    """印に実際に使われる点数表の名前。predict と同じく、回収型のファイルが無ければ base に落ちる
+    (#175 レビュー: flag だけを見ると、roi のファイルが無い時に base の◎へ roi の閾値を当てる)。"""
+    try:
+        from ml.scorecard import live_model_name, MODEL_PATHS
+        name = live_model_name()
+        return name if os.path.exists(MODEL_PATHS.get(name, "")) else "base"
+    except Exception:
+        return "base"
+
+
+def _conf_samples_path(name):
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models",
+                        f"scorecard_{name}_conf_samples.json")
+
+
+def _model_sha1(name):
+    try:
+        import hashlib
+        from ml.scorecard import MODEL_PATHS
+        with open(MODEL_PATHS[name], "rb") as f:
+            return hashlib.sha1(f.read()).hexdigest()
+    except Exception:
+        return None
+
+
+def _conf_samples_for_live(conn, live):
+    """#175: 点数表 live が選んだ◎の (◎表示勝率, 騎手信頼) を新しい順に最大400件。
+
+    各キャッシュ行で「live が選んだ◎」を探す — その行の印が live で付いていれば mark、もう一方の
+    点数表で付いていれば影の印 (mark_shadow) の◎ (= live で選んだらこうだった)、点数表の名前を
+    持たない #175 より前の行は base の◎ (live が base の時だけ使う)。どの点数表が印に使われていても
+    両方の閾値を作れるので、戻した直後も分布と閾値のペアが崩れない (#36/#120/#147/#151/#156)。
+    足りない分は models/scorecard_<live>_conf_samples.json (過去を live で選び直した◎。
+    scripts/rescore_conf_samples.py) を、今の pkl と同じ版で作ったものに限って補う。
+    標本が30件に満たなければ None (= 従来の sc_points の行で引く)。"""
+    samples, realized, realized_new, dates, seen = [], [], [], [], set()
+    n_live = n_shadow = n_old = 0
+    for r in conn.execute(f"""
+        SELECT pc.race_id, pc.predictions_json, pc.confidence, pc.conf_reason, g.race_name, g.race_date
+        FROM predictions_cache pc JOIN races g ON pc.race_id = g.race_id
+        WHERE {PRE_START_SQL} AND pc.predictions_json LIKE '%"sc_points"%'
+        ORDER BY g.race_date DESC
+    """):
+        if len(samples) >= CONF_SAMPLE_N:
+            break
+        if is_ml_out_of_domain(r["race_name"] or ""):
+            continue
+        try:
+            preds = json.loads(r["predictions_json"] or "[]")
+        except (ValueError, TypeError):
+            continue
+        if not any((p.get("sc_points") or 0) for p in preds):
+            continue
+        row_model = next((p.get("sc_model") for p in preds if p.get("sc_model")), "")
+        if row_model == live:
+            key, kind = "mark", "live"
+        elif row_model in ("roi", "base"):
+            key, kind = "mark_shadow", "shadow"
+        elif live == "base":
+            key, kind = "mark", "old"
+        else:
+            continue
+        ax = next((p for p in preds if p.get(key) == "◎"), None)
+        w = (ax or {}).get("pred_win_display_pct")
+        if not w:
+            continue
+        samples.append((float(w), ax.get("jockey_trust", 0) or 0))
+        seen.add(r["race_id"])
+        dates.append(r["race_date"])
+        if kind == "live":
+            n_live += 1
+        elif kind == "shadow":
+            n_shadow += 1
+        else:
+            n_old += 1
+        # 実際に保存された信頼度は、その行の◎を live が選んだ時だけ (ラベルと◎が対になっている)
+        if kind != "shadow" and r["confidence"] in _GRADES:
+            realized.append(r["confidence"])
+            if _is_new_adjust_logic(r["race_date"], r["conf_reason"]):
+                realized_new.append(r["confidence"])
+    path = _conf_samples_path(live)
+    n_file = 0
+    if len(samples) < CONF_SAMPLE_N and os.path.exists(path):
+        try:
+            doc = json.load(open(path, encoding="utf-8"))
+        except (OSError, ValueError):
+            doc = {}
+        cur = _model_sha1(live)
+        if doc.get("model_sha1") and doc.get("model_sha1") == cur:
+            for e in sorted(doc.get("samples") or [], key=lambda x: x.get("race_date") or "", reverse=True):
+                if len(samples) >= CONF_SAMPLE_N:
+                    break
+                if e.get("race_id") in seen or not e.get("w"):
+                    continue
+                samples.append((float(e["w"]), e.get("jt", 0) or 0))
+                dates.append(e.get("race_date") or "")
+                n_file += 1
+        else:
+            print(f"  ⚠️ 信頼度: {os.path.basename(path)} は今の点数表 {live} と別の版で作られている "
+                  f"(標本 {doc.get('model_version')} 補正〜{doc.get('lin_fit_until')}) → 使わない。"
+                  f"scripts/rescore_conf_samples.py --model {live} で作り直すこと")
+    if len(samples) < MIN_SAMPLE_FOR_THRESHOLDS:
+        if live != "base" or n_shadow:
+            print(f"  ⚠️ 信頼度: 点数表 {live} の◎の標本が {len(samples)} 件しかない → 従来の標本で引く")
+        return None
+    parts = [f"{k} {v}件" for k, v in (("印として付いた◎", n_live), ("影の印の◎", n_shadow),
+                                       ("#175 より前の◎", n_old), (f"過去を {live} で選び直した◎", n_file)) if v]
+    label = f"点数表 {live} の◎ (" + " + ".join(parts) + ")"
+    print(f"  📐 信頼度の閾値の標本: {label}")
+    return samples, realized, realized_new, dates, label
+
+
+def build_confidence_thresholds(conn, live=None):
     """現行の印ロジックが出している ◎表示勝率の分布から、目標構成比を満たす閾値を引く。
 
     固定閾値は印ロジックやモデルが変わるたびに陳腐化する (#36/#120/#147)。
@@ -686,17 +802,40 @@ def build_confidence_thresholds(conn):
     **最終構成比** が目標になるように閾値を較正し、補正前・補正後・実際に保存された
     構成比を JSON に残す (次に崩れた時に週次の基準表で気づけるように)。
     """
-    # 現行ロジック = 点数表 (sc_points が入っている) のレースを優先
-    samples, used, realized = [], None, []
-    for cond, label in (("AND pc.predictions_json LIKE '%\"sc_points\"%'", "点数表 (現行)"),
-                        ("", "直近全体 (点数表以前を含む)")):
+    # #175: 印の点数表を切り替えた (base → roi) ので、◎を「今の点数表」で選んだ分布を使う。
+    # 切り替え直後は新しい予測が少ないので、過去のレースを今の点数表で選び直した◎
+    # (scripts/rescore_conf_samples.py が作る models/scorecard_<名前>_conf_samples.json) で補う。
+    live = live or _live_scorecard_name()
+    pref = _conf_samples_for_live(conn, live)
+    samples, used, realized, realized_new, dates = [], None, [], [], []
+    if pref is not None:
+        samples, realized, realized_new, dates, used = pref
+    # 現行ロジック = 点数表 (sc_points が入っている) のレースを優先 (#175 の標本が取れなかった時)
+    _conds = () if pref is not None else (
+        ("AND pc.predictions_json LIKE '%\"sc_points\"%'", "点数表 (現行)"),
+        ("", "直近全体 (点数表以前を含む)"))
+    for cond, label in _conds:
         samples, realized, realized_new, dates = [], [], [], []
+        _considered = 0
         for r in conn.execute(f"""
             SELECT pc.predictions_json, pc.confidence, pc.conf_reason, g.race_name, g.race_date
             FROM predictions_cache pc
             JOIN races g ON pc.race_id = g.race_id
-            WHERE {PRE_START_SQL} {cond} ORDER BY g.race_date DESC LIMIT 400
+            WHERE {PRE_START_SQL} {cond} ORDER BY g.race_date DESC
         """):
+            # #175: ◎を live 以外の点数表で選んだ行は数えない (直近400行の窓を数える前に除く —
+            # 後で除くと、印を切り替えて数週後には窓がすべて別の点数表の行になり標本が0になる)
+            _pj = r["predictions_json"] or ""
+            if '"sc_model"' in _pj:
+                try:
+                    _ax = next((p for p in json.loads(_pj) if p.get("mark") == "◎"), {})
+                except (ValueError, TypeError):
+                    _ax = {}
+                if (_ax.get("sc_model") or live) != live:
+                    continue
+            _considered += 1
+            if _considered > CONF_SAMPLE_N:
+                break
             if is_ml_out_of_domain(r["race_name"] or ""):
                 continue
             try:
@@ -738,8 +877,8 @@ def build_confidence_thresholds(conn):
     post = _mix(_final_grades(samples, th))
     from confidence import post_adjust
     n_adj = sum(1 for w, jt in samples if post_adjust(_grade_with(th, w), jt)[1])
-    return {"available": True, "n": n, "sample": used,
-            "sample_period": f"{min(dates)}〜{max(dates)}",
+    return {"available": True, "n": n, "sample": used, "scorecard": live,   # #175: どの点数表の◎の分布か
+            "sample_period": f"{min(d for d in dates if d) if any(dates) else ''}〜{max(dates) if dates else ''}",
             "target_mix": TARGET_MIX, "thresholds": th,
             "calibrated_on": "補正後 (confidence.post_adjust 込み) の最終構成比",
             "mix_before_adjust": pre, "mix_after_adjust": post,
@@ -990,7 +1129,34 @@ def _confidence_or_keep(conn, keep=False, why=None):
     据え置いた時も引き直した値は if_rebuilt に残す (次の金曜にどれだけ動くかの目安)。
     """
     fresh = build_confidence_thresholds(conn)
+    # #175: 両方の点数表の閾値を毎回作っておく。印の点数表を切り替えた (戻した) 直後でも、
+    # race_baseline.confidence_thresholds() が実際に◎を選んでいる点数表の閾値を選べる
+    # (週末の途中の据え置き (keep) は辞書ごと写すので、ここに入っていれば一緒に残る)
+    if fresh.get("available"):
+        _by = {}
+        for _nm in ("roi", "base"):
+            try:
+                _c = fresh if _nm == fresh.get("scorecard") else build_confidence_thresholds(conn, live=_nm)
+            except Exception as _e:
+                _c = {"available": False, "note": f"{type(_e).__name__}: {_e}"}
+            _by[_nm] = ({k: _c.get(k) for k in ("available", "thresholds", "n", "sample", "sample_period")}
+                        if _c.get("available") else {"available": False, "note": _c.get("note")})
+        fresh["by_scorecard"] = _by
     if not keep:
+        if not fresh.get("available"):
+            # #175 レビュー: 引けなかった時に固定値 (45/30/20/13 = #147 でペアが外れていると分かっている値)
+            # へ落とさず、既存の閾値を大きく警告して使い続ける
+            try:
+                with open(OUT, encoding="utf-8") as f:
+                    _prev = json.load(f).get("confidence")
+            except (OSError, ValueError):
+                _prev = None
+            if isinstance(_prev, dict) and _prev.get("available"):
+                print(f"🚨 信頼度: 閾値を引き直せない ({fresh.get('note')}) → 既存の閾値 "
+                      f"{_prev.get('thresholds')} を使い続ける")
+                held = dict(_prev)
+                held["keep_reason"] = f"引き直せなかった ({fresh.get('note')})"
+                return held
         return fresh
     try:
         with open(OUT, encoding="utf-8") as f:

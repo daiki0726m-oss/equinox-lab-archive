@@ -201,9 +201,10 @@
  },
  "confidence": {
   "available": true,
-  "n": 227,
-  "sample": "点数表 (現行)",
-  "sample_period": "2026-10-10〜2026-11-15",
+  "n": 381,
+  "sample": "点数表 roi の◎ (過去を roi で選び直した◎ 381件)",
+  "scorecard": "roi",
+  "sample_period": "2026-09-05〜2026-11-15",
   "target_mix": {
    "S": 0.18,
    "A": 0.24,
@@ -212,45 +213,81 @@
    "D": 0.11
   },
   "thresholds": {
-   "S": 40.4,
-   "A": 21.3,
-   "B": 13.2,
-   "C": 9.2
+   "S": 33.1,
+   "A": 19.9,
+   "B": 12.2,
+   "C": 6.8
   },
   "calibrated_on": "補正後 (confidence.post_adjust 込み) の最終構成比",
   "mix_before_adjust": {
-   "S": 0.0529,
-   "A": 0.3172,
-   "B": 0.3436,
-   "C": 0.1762,
-   "D": 0.1101
+   "S": 0.1155,
+   "A": 0.2572,
+   "B": 0.3386,
+   "C": 0.1811,
+   "D": 0.1076
   },
   "mix_after_adjust": {
-   "S": 0.1806,
-   "A": 0.2379,
-   "B": 0.2952,
-   "C": 0.1762,
-   "D": 0.1101
+   "S": 0.1811,
+   "A": 0.2388,
+   "B": 0.2913,
+   "C": 0.1811,
+   "D": 0.1076
   },
-  "adjusted_share": 0.1762,
+  "adjusted_share": 0.1129,
   "realized_mix": {
-   "S": 0.2026,
-   "A": 0.1894,
-   "B": 0.2247,
-   "C": 0.1938,
-   "D": 0.1894
+   "S": 0.0,
+   "A": 0.0,
+   "B": 0.0,
+   "C": 0.0,
+   "D": 0.0
   },
-  "realized_n": 227,
+  "realized_n": 0,
   "realized_note": "各予測の時点の閾値・補正で付いた信頼度 (predictions_cache.confidence)",
   "realized_new_logic_since": "2026-11-07",
   "realized_new_logic_mix": {
-   "S": 0.1125,
-   "A": 0.1875,
-   "B": 0.425,
-   "C": 0.1625,
-   "D": 0.1125
+   "S": 0.0,
+   "A": 0.0,
+   "B": 0.0,
+   "C": 0.0,
+   "D": 0.0
   },
-  "realized_new_logic_n": 80
+  "realized_new_logic_n": 0,
+  "by_scorecard": {
+   "roi": {
+    "available": true,
+    "thresholds": {
+     "S": 33.1,
+     "A": 19.9,
+     "B": 12.2,
+     "C": 6.8
+    },
+    "n": 381,
+    "sample": "点数表 roi の◎ (過去を roi で選び直した◎ 381件)",
+    "sample_period": "2026-09-05〜2026-11-15"
+   },
+   "base": {
+    "available": true,
+    "thresholds": {
+     "S": 35.4,
+     "A": 22.5,
+     "B": 13.7,
+     "C": 9.3
+    },
+    "n": 381,
+    "sample": "点数表 base の◎ (#175 より前の◎ 381件)",
+    "sample_period": "2026-09-05〜2026-11-15"
+   }
+  },
+  "previous_thresholds_175": {
+   "thresholds": {
+    "S": 40.4,
+    "A": 21.3,
+    "B": 13.2,
+    "C": 9.2
+   },
+   "sample": "点数表 (現行)",
+   "sample_period": "2026-10-10〜2026-11-15"
+  }
  },
  "bet_gate": {
   "available": true,

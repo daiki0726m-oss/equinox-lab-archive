@@ -49,6 +49,16 @@ scripts/oos_window.py はこの境界も見て評価窓を決める (#157)。
       --pts-fit-from 2020-01-01 --pts-fit-until 2025-05-10 \
       --lin-fit-from 2025-05-11 --lin-fit-until 2026-10-25 \
       --sf-candidates none --out models/scorecard.pkl
+
+## --objective roi_win (#175: 回収型の点数表)
+  f2 の二段はそのまま、目標と重みだけを単勝の払戻で決める (下の OBJECTIVES の説明)。
+  # 2026-11-18 の出荷版 (印に使う点数表。--base "" で評価の比較を省く)
+  python3 scripts/train_scorecard.py --mode f2 --objective roi_win --cache feat_sv.pkl \
+      --pts-fit-from 2020-01-01 --pts-fit-until 2025-05-10 \
+      --lin-fit-from 2025-05-11 --lin-fit-until 2026-11-15 \
+      --sf-candidates none --base "" --out models/scorecard_roi.pkl
+  出荷後は信頼度の閾値の標本も作り直す (#151 の「閾値と分布はペア」):
+  python3 scripts/rescore_conf_samples.py --model roi --cache feat_sv.pkl
 """
 import argparse
 import os
@@ -99,8 +109,9 @@ LR_TOL = 1e-8
 LR_MAX_ITER = 10000
 
 
-def fit(lab_tr, y_tr, C=1.0, tol=LR_TOL, max_iter=LR_MAX_ITER, info=None):
-    """区分のダミーのロジスティック回帰。info (dict) を渡すと solver・tol・反復数を書き込む。"""
+def fit(lab_tr, y_tr, C=1.0, tol=LR_TOL, max_iter=LR_MAX_ITER, info=None, sample_weight=None):
+    """区分のダミーのロジスティック回帰。info (dict) を渡すと solver・tol・反復数を書き込む。
+    sample_weight (#175 回収型): 行ごとの重み。None なら従来と完全に同じ計算。"""
     import warnings
     from sklearn.exceptions import ConvergenceWarning
     X = pd.get_dummies(lab_tr.astype(str), prefix_sep="=")
@@ -109,12 +120,13 @@ def fit(lab_tr, y_tr, C=1.0, tol=LR_TOL, max_iter=LR_MAX_ITER, info=None):
     with warnings.catch_warnings():
         warnings.simplefilter("error", ConvergenceWarning)
         try:
-            m.fit(X.values.astype(np.float64), y_tr)
+            m.fit(X.values.astype(np.float64), y_tr, sample_weight=sample_weight)
         except ConvergenceWarning as e:
             raise RuntimeError(f"区分点のロジスティック回帰が収束しない (tol={tol}, max_iter={max_iter}): {e}")
     if info is not None:
         info.update({"solver": "lbfgs", "C": float(C), "tol": float(tol), "max_iter": int(max_iter),
-                     "n_iter": int(np.max(m.n_iter_)), "rows": int(len(y_tr))})
+                     "n_iter": int(np.max(m.n_iter_)), "rows": int(len(y_tr)),
+                     "weighted": sample_weight is not None})
     coef = pd.Series(m.coef_[0], index=cols)
     # 各項目の中で「平均的な馬」が0点になるよう正規化 → 点数が加減点として読める
     pts = {}
@@ -418,23 +430,148 @@ def coerce_frame(d, col_map=None, extra=()):
     return d
 
 
-def fit_pts_stage(d, drop=(), col_map=None, C=1.0):
+def fit_pts_stage(d, drop=(), col_map=None, C=1.0, y=None, sample_weight=None):
     """区分点 (pts) の当てはめ: 窓の行で、drop を除く区分項目のダミーのロジスティック回帰
-    (目標 = 3着内)。各項目の平均的な馬が0点。col_map の列から値を読む。"""
+    (目標 = 3着内)。各項目の平均的な馬が0点。col_map の列から値を読む。
+    y / sample_weight (#175 回収型): 目標と重みの差し替え。None なら従来どおり (3着内・重みなし)。"""
     spec = build_spec(d, col_map)
     lab = label(d, spec, skip=set(drop), col_map=col_map)
     info = {}
-    pts, cols = fit(lab, d["y"].to_numpy(), C=C, info=info)
+    pts, cols = fit(lab, d["y"].to_numpy() if y is None else np.asarray(y), C=C, info=info,
+                    sample_weight=sample_weight)
     return {"pts": pts, "cols": cols, "spec": spec, "drop": list(drop),
             "col_map": dict(col_map or {}), "pts_solver": info}
 
 
-def fit_lin_stage(d, base, drop, lin_cols, flag_cols=()):
+# ── #175 (2026-11-18): 回収型の点数表 ──
+# 目的を「3着内に来るか」から「来た時にいくら払い戻されたか」に変える。区分・項目・オッズを
+# 使わないことは今の点数表と同じで、学習行の目標と重みだけを払戻で決める (払戻は学習窓の
+# レースのラベルとしてだけ使う。予測するレースの払戻は見ない)。
+# 検証 (fx180 M4、学習に使っていない 2025-05-11〜2026-11-15 の 5,082R、印から組む7券種の
+# 等額バスケット): 回収率 73.3% → 81.0% (+7.6 [+3.3,+12.2])、別担当が一から作り直して
+# 同じ印を再現、払戻を学習行の間で並べ替えた偽の版は +1〜2、同じ数だけ印を入れ替える
+# 200回の試しで一度も届かない。2026年の前向き検証分 +9.9。注意: 大当たりへの依存が残る
+# (1回の払戻を2,000円で頭打ちにすると +4〜6)。実際の期待は +3〜5pt と見ている。
+# 定義 (検証した B1c と同じ): y = 単勝の払戻がある (= 勝った) / 第1段の重み = 勝ち馬は
+# min(単勝払戻/100, cap)・他は1 を平均1に正規化 / 第2段の目標値 = 勝ち馬は min(払戻/100, cap)・
+# 他は0 で、レースごとの正規化をしない (= 高配当で決着したレースほど重い)。cap = 30。
+OBJECTIVES = ("top3", "roi_win")
+DEFAULT_PAYOUT_CAP = 30.0
+
+
+def attach_win_payouts(d):
+    """各行の単勝払戻 (100円あたりの倍率、無ければ0) を tan_ret 列に付けた写しを返す。
+    学習行の目標・重みにだけ使う。※ payouts は1レースに単勝の行を1つしか持たないので、1着同着の
+    2頭目は常に払戻なし (= 負例) になる (2020〜2026 で約40R)。検証した版と同じ扱い。"""
+    from database import get_db
+    ids = sorted(set(d["race_id"].astype(str)))
+    q = {}
+    with get_db() as conn:
+        for i in range(0, len(ids), 900):
+            ch = ids[i:i + 900]
+            ph = ",".join("?" * len(ch))
+            for rid, cmb, amt in conn.execute(
+                    f"SELECT race_id, combination, payout_amount FROM payouts "
+                    f"WHERE bet_type = '単勝' AND race_id IN ({ph})", ch):
+                try:
+                    hn = int(str(cmb).strip())
+                except (TypeError, ValueError):
+                    continue
+                k = (str(rid), hn)
+                q[k] = max(q.get(k, 0), amt or 0)
+    out = d.copy()
+    out["tan_ret"] = [q.get((str(r), int(h)), 0) / 100.0
+                      for r, h in zip(out["race_id"], out["horse_number"])]
+    # #175 レビュー: 払戻が「正しい馬の行」に乗ったかを着順と照合する (馬番ズレ・着順欠落を止める)
+    rid = out["race_id"].astype(str).to_numpy()
+    fin1 = pd.to_numeric(out["finish_position"], errors="coerce").fillna(0).to_numpy() == 1
+    pos = out["tan_ret"].to_numpy(float) > 0
+    _w = pd.Series(fin1).groupby(rid).sum()
+    dh = set(_w[_w >= 2].index)                                   # 1着同着のレース
+    bad_pay = int((pos & ~fin1).sum())                            # 払戻のある馬が1着でない
+    miss_win = int((fin1 & ~pos & ~np.isin(rid, list(dh))).sum())  # 同着以外で1着に払戻が無い
+    no_pos = int((~pd.Series(pos).groupby(rid).any()).sum())      # 正例が1つも無いレース
+    n_r = len(set(rid))
+    print(f"  単勝ラベル照合: 払戻≠1着 {bad_pay} / 1着に払戻なし(同着除く) {miss_win} / "
+          f"正例なし {no_pos} / {n_r}R (同着 {len(dh)}R — 2頭目は payouts に単勝の行が無く負例として扱う)")
+    if bad_pay > 0 or (miss_win + no_pos) > 0.005 * max(n_r, 1):
+        raise SystemExit("単勝の払戻と着順が食い違う — 馬番ズレ/着順欠落を確認 (results vs payouts)")
+    return out
+
+
+def roi_win_labels(d, cap=DEFAULT_PAYOUT_CAP):
+    """(y, 第1段の重み (平均1), 第2段の目標値) を返す。d は attach_win_payouts 済み。"""
+    ret = d["tan_ret"].to_numpy(float)
+    y = (ret > 0).astype(int)
+    r = np.minimum(ret, float(cap))
+    pw = np.where(y == 1, np.maximum(r, 1e-12), 1.0)
+    w = pw / pw.mean()
+    v = np.where(y == 1, np.maximum(r, 1e-12), 0.0)
+    return y, w, v
+
+
+def _value_targets(v, race_ids):
+    """目標値 v を「レースごとに正規化しない」ソフトマックスの重みに直す (検証した版と同じ)。
+    戻り値: (keep (正の目標が1つでもあるレースの行), t (全体の目標の総和 = そのレース数))。"""
+    v = np.asarray(v, dtype=float)
+    rid = pd.factorize(pd.Series(race_ids))[0]
+    nv = np.bincount(rid, weights=v)
+    keep = nv[rid] > 0
+    t = v * ((nv > 0).sum() / v.sum())
+    return rid, keep, t
+
+
+def fit_race_softmax_values(X, v, race_ids, return_ll=False):
+    """#175: レース内ソフトマックスを目標値 v で当てはめる (レース内で正規化しない)。
+    目的関数 = Σ t_i log p_i (t = v を全体で正規化)。高配当の勝ち馬・レースほど重い。"""
+    from scipy.optimize import minimize
+    X = np.asarray(X, dtype=float)
+    rid, keep, t = _value_targets(v, race_ids)
+    X, t = X[keep], t[keep]
+    rid2 = pd.factorize(pd.Series(rid[keep]))[0]
+
+    def f(b):
+        s = X @ b
+        mx = np.zeros(rid2.max() + 1)
+        np.maximum.at(mx, rid2, s)
+        e = np.exp(s - mx[rid2])
+        Z = np.bincount(rid2, weights=e)
+        p = e / Z[rid2]
+        ll = (t * (s - mx[rid2] - np.log(Z[rid2]))).sum()
+        tr = np.bincount(rid2, weights=t)
+        g = X.T @ t - X.T @ (p * tr[rid2])
+        return -ll, -g
+
+    r = minimize(f, np.ones(X.shape[1]), jac=True, method="L-BFGS-B")
+    if not r.success:
+        print(f"  ⚠️ 当てはめが収束しなかった: {r.message}")
+    if return_ll:
+        return r.x, float(-r.fun)
+    return r.x
+
+
+def race_softmax_ll_values(score_logodds, v, race_ids):
+    """fit_race_softmax_values と同じ目的関数の値 (自己点検用)。"""
+    s = np.asarray(score_logodds, dtype=float)
+    rid, keep, t = _value_targets(v, race_ids)
+    s, t = s[keep], t[keep]
+    rid = pd.factorize(pd.Series(rid[keep]))[0]
+    mx = np.full(rid.max() + 1, -np.inf)
+    np.maximum.at(mx, rid, s)
+    lse = np.log(np.bincount(rid, weights=np.exp(s - mx[rid]))) + mx
+    return float((t * (s - lse[rid])).sum())
+
+
+def fit_lin_stage(d, base, drop, lin_cols, flag_cols=(), values=None):
     """連続項目・JRA初出走・flag 項目の当てはめ: [区分点の合計, z…, 初出走, flag…] の
     レース内ソフトマックス。区分点の係数で割って点数の単位に揃える。
+    values (#175 回収型): 目標値。None なら従来どおり (3着内を 1/頭数 に正規化)。
     戻り値: (model, 対数尤度, 当てはめた係数の数)"""
     X, cols = lin_design(d, base, drop, lin_cols, flag_cols)
-    b, ll = fit_race_softmax(X, d["y"].to_numpy(), d["race_id"].to_numpy(), return_ll=True)
+    if values is None:
+        b, ll = fit_race_softmax(X, d["y"].to_numpy(), d["race_id"].to_numpy(), return_ll=True)
+    else:
+        b, ll = fit_race_softmax_values(X, values, d["race_id"].to_numpy(), return_ll=True)
     b0 = float(b[0])
     if b0 <= 0:
         raise SystemExit(f"区分点の傾きが {b0:.3f} (<=0) — 当てはめが壊れている")
@@ -521,14 +658,36 @@ def main_f2(args):
           f"連続項目 {l_lo}〜{l_hi}: {d2['race_id'].nunique()}レース / {len(d2)}頭 "
           f"(障害・確定5頭以下を除く)")
     print(f"   col_map={col_map} drop={drop} lin={lin_cols}")
-    stage1 = fit_pts_stage(d1, drop, col_map)
+    objective = getattr(args, "objective", "top3") or "top3"
+    cap = getattr(args, "payout_cap", None)
+    cap = DEFAULT_PAYOUT_CAP if cap is None else float(cap)
+    if objective == "roi_win":
+        if not cap >= 1:          # NaN も弾く
+            raise SystemExit(f"--payout-cap は 1 以上 (指定 {cap}; 検証した版は {DEFAULT_PAYOUT_CAP:g})")
+        if cap != DEFAULT_PAYOUT_CAP:
+            print(f"  ⚠️ --payout-cap {cap:g} は未検証 (検証した B1c は {DEFAULT_PAYOUT_CAP:g}) — "
+                  f"models/scorecard_roi.pkl として出荷しないこと")
+    v2 = None
+    if objective == "roi_win":
+        # #175: 芝ダ替わりの flag は 3着内の目的でしか検証していないので、回収型では使わない
+        if cands != ["none"]:
+            raise SystemExit("--objective roi_win は --sf-candidates none でしか検証していない")
+        d1 = attach_win_payouts(d1)
+        d2 = attach_win_payouts(d2)
+        y1, w1, _ = roi_win_labels(d1, cap)
+        _, _, v2 = roi_win_labels(d2, cap)
+        print(f"  🎯 回収型 (#175): 目標 = 単勝の払戻 (上限 {cap:g}倍) / 第1段の勝ち馬 {int(y1.sum())}頭 "
+              f"(重みの最大 {w1.max():.2f}) / 第2段の勝ち馬 {int((v2 > 0).sum())}頭")
+        stage1 = fit_pts_stage(d1, drop, col_map, y=y1, sample_weight=w1)
+    else:
+        stage1 = fit_pts_stage(d1, drop, col_map)
     si = {k: round(v * 10, 2) for k, v in stage1["pts"].items() if k.split("=")[0] in col_map}
     print(f"  区分点 {len(stage1['pts'])}個 (指数の点×10: {si})")
 
     fits = {}
     for k in (["none"] if "none" in cands else []) + [c for c in cands if c != "none"]:
         flags = () if k == "none" else SF_CANDIDATES[k]
-        m, ll, nk = fit_lin_stage(d2, stage1, drop, lin_cols, flags)
+        m, ll, nk = fit_lin_stage(d2, stage1, drop, lin_cols, flags, values=v2)
         fits[k] = (m, ll, nk, len(flags))
         print(f"  候補 {k:4s} {list(flags)}: 対数尤度 {ll:.2f} (係数 {nk}個) "
               f"flags(点) {({c: round(v*10, 2) for c, v in (m.get('flags') or {}).items()})}")
@@ -542,7 +701,12 @@ def main_f2(args):
     print(f"  → 選択: {chosen} (規則 {args.sf_select})")
 
     model.update({
-        "version": "scorecard_v3_f2",
+        "version": "scorecard_v3_f2" if objective == "top3" else "scorecard_v3_f2_roi",
+        "objective": ({"name": "top3"} if objective == "top3" else
+                      {"name": "roi_win", "payout_cap": cap,
+                       "definition": "y=単勝の払戻あり / 第1段の重み=勝ち馬 min(払戻/100,cap)・他1 を平均1 / "
+                                     "第2段の目標=勝ち馬 min(払戻/100,cap)・他0、レース内で正規化しない (#175)",
+                       "validated": cap == DEFAULT_PAYOUT_CAP and cands == ["none"]}),
         "train_until": p_hi,
         "pts_fit_from": p_lo, "pts_fit_until": p_hi,
         "train_races": int(d1["race_id"].nunique()),
@@ -563,7 +727,10 @@ def main_f2(args):
 
     # 自己点検: 保存する点数 (×10) を温度 lin_scale で戻すと、当てはめた対数尤度と一致するはず
     s_new = score_with_reasons(d2, model)[0]
-    ll_chk = race_softmax_ll(s_new / 10 * model["lin_scale"], d2["y"], d2["race_id"])
+    if v2 is None:
+        ll_chk = race_softmax_ll(s_new / 10 * model["lin_scale"], d2["y"], d2["race_id"])
+    else:
+        ll_chk = race_softmax_ll_values(s_new / 10 * model["lin_scale"], v2, d2["race_id"])
     print(f"\n【連続項目の窓 (in-sample, 参考)】 対数尤度 {ll_chk:.2f} (当てはめ時 {ll:.2f})")
     if abs(ll_chk - ll) > 1e-3 * max(1.0, abs(ll)):
         raise SystemExit("保存する点数が当てはめた式と一致しない — score_with_reasons と lin_design の食い違い")
@@ -601,7 +768,8 @@ def main():
                          "f2=区分点を窓1・連続項目と芝ダ替わりを窓2 で当てはめる二段 (#168)")
     ap.add_argument("--train-until", default=None,
                     help="この日までを学習に使う (既定: 全データの時系列80%%)")
-    ap.add_argument("--out", default=MODEL_PATH)
+    ap.add_argument("--out", default=None,
+                    help="保存先 (既定: --objective top3 → models/scorecard.pkl / roi_win → models/scorecard_roi.pkl)")
     ap.add_argument("--cache", default=None,
                     help="特徴量テーブルの pickle (構築を省略して再利用)")
     ap.add_argument("--db", default=None, help="使う DB のパス (既定: keiba.db)")
@@ -627,9 +795,27 @@ def main():
                     help="[f2] 候補の選び方 (連続項目の窓の中だけ)。ll=対数尤度最大 (c が a,b を含むので"
                          "常に c になる) / aic=対数尤度−係数の数")
     ap.add_argument("--si-table", default=None, help="[f2] V2d の基準表 (既定 models/si_variant_table.json)")
+    ap.add_argument("--objective", choices=OBJECTIVES, default="top3",
+                    help="[f2] top3=3着内 (従来) / roi_win=単勝の払戻で重み付け (#175 回収型、"
+                         "models/scorecard_roi.pkl に保存する)")
+    ap.add_argument("--payout-cap", type=float, default=DEFAULT_PAYOUT_CAP,
+                    help="[f2 roi_win] 単勝払戻の倍率の上限 (既定 30 = 検証した版)")
     ap.add_argument("--allow-table-mismatch", action="store_true",
                     help="[f2] 特徴量テーブルの si_avg_v が別の基準表で作られていても続ける (非推奨)")
     args = ap.parse_args()
+    # #175 レビュー: 目的と保存先の取り違えを止める。--objective は f2 でしか効かない (他のモードで
+    # 黙って3着内の点数表を書き、回収型の枠に入れると印が黙って3着内に戻る)。回収型を
+    # models/scorecard.pkl に書くと影の印 (base) が消え、毎週の比較が差0のまま止まる
+    from ml.scorecard import ROI_MODEL_PATH
+    if args.objective != "top3" and args.mode != "f2":
+        raise SystemExit(f"--objective {args.objective} は --mode f2 でしか効かない (#175)")
+    if args.out is None:
+        args.out = ROI_MODEL_PATH if args.objective == "roi_win" else MODEL_PATH
+    _out = os.path.abspath(args.out)
+    if args.objective == "roi_win" and _out == os.path.abspath(MODEL_PATH):
+        raise SystemExit("回収型を models/scorecard.pkl (3着内の点数表の枠) に書こうとしている — --out を確認 (#175)")
+    if args.objective == "top3" and _out == os.path.abspath(ROI_MODEL_PATH):
+        raise SystemExit("3着内の点数表を models/scorecard_roi.pkl (回収型の枠) に書こうとしている — --out を確認 (#175)")
     if args.db:
         import database
         database.DB_PATH = args.db

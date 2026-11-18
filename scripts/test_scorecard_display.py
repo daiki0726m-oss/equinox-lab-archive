@@ -36,7 +36,11 @@ def check(name, ok, detail=""):
 
 
 RAW = re.compile(sc.RAW_BIN_RE)
-m = sc.load_model()
+# #175: load_model() の既定は「印に使う点数表」(回収型になりうる)。このテストの [4] などは
+# 3着内の点数表の配点を前提にした合成データ (回収型ではこの馬の休養日数の点がほぼ0で、
+# 0点前後は理由に出さない規則どおり内訳から消える = 表示の不具合ではない) なので base に固定する。
+# 区分の表示名そのものは verify_feature_parity が両方の点数表で検査している。
+m = sc.load_model(sc.MODEL_PATH)
 if not m:
     print("⚠️ models/scorecard.pkl が無い — テストを飛ばす")
     sys.exit(0)

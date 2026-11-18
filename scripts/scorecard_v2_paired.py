@@ -130,18 +130,30 @@ def _load_cache(path=CACHE):
 
 
 def _prod_marks(d8):
-    """{race_id: [◎, ○, ▲, △, △] の馬番}。投稿印を優先、無ければ公開 JSON の印。"""
+    """{race_id: [◎, ○, ▲, △, △] の馬番} = 3着内の点数表 (v3、base) の印。投稿印を優先、無ければ公開 JSON。
+
+    #175: 回収型 (roi) が印に使われたレースでは、配信した印は v3 ではない。v3 の印は影の印
+    (mark_shadow / posted_marks の "shadow") に残っているので、そちらを使う (#168 の対応比較と
+    再現度を v3 のまま積み上げるため)。"""
     out = {}
     p = os.path.join(DATA, f"predictions_{d8}.json")
     if os.path.exists(p):
         doc = json.load(open(p, encoding="utf-8"))
         for _v, rs in (doc.get("venues") or {}).items():
             for r in rs or []:
-                ms = [(h.get("mark"), h.get("horse_number")) for h in r.get("horses") or [] if h.get("mark")]
+                hs = r.get("horses") or []
+                live = next((h.get("sc_model") for h in hs if h.get("sc_model")), "")
+                key = "mark_shadow" if live == "roi" else "mark"
+                ms = [(h.get(key), h.get("horse_number")) for h in hs if h.get(key)]
                 out[str(r["race_id"])] = ms
     pm = os.path.join(DATA, f"posted_marks_{d8}.json")
     if os.path.exists(pm):
-        for rid, ents in ((json.load(open(pm, encoding="utf-8")) or {}).get("races") or {}).items():
+        doc = json.load(open(pm, encoding="utf-8")) or {}
+        shadow = doc.get("shadow") or {}
+        for rid, ents in (doc.get("races") or {}).items():
+            sh = shadow.get(rid) or {}
+            if sh.get("sc_model") == "roi":
+                ents = sh.get("marks") or []
             out[str(rid)] = [(e.get("mark"), e.get("horse_number")) for e in ents if e.get("mark")]
     res = {}
     for rid, ms in out.items():
@@ -193,7 +205,9 @@ def compute(days, conn, features_pkls=None, workers=1, cache_path=CACHE, hist=No
     cache = _load_cache(cache_path)
     have = cache["races"]
     m2 = pickle.load(open(V2_PKL, "rb"))
-    m3 = sc.load_model()
+    # #175: load_model() の既定は「印に使う点数表」(回収型になりうる)。この比較は V2d の導入
+    # (#168) の効果を測るもの = 3着内の点数表 v3 と v2 の対応比較なので、base に固定する
+    m3 = sc.load_model(sc.MODEL_PATH)
     warn = sc.check_si_variant(m3)
     if warn:
         print(f"  ⚠️ 現行の点数表: {warn} → 区分の差し替えを外して代用 (本番の predict と同じ扱い)")

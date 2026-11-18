@@ -181,9 +181,14 @@ def collect(days, conn, hist=None, hist_from=None):
                                    odds_post=c.get("odds_win") or 0,
                                    l3=b.get("pred_top3_abs_pct"), rs=b.get("rank_score"),
                                    sc=b.get("sc_points")))
+            # #175: どちらの点数表の点数か (sc_points を3着内の見込みに換算する (c) は base の点数だけ使う)。
+            # 旧キャッシュ・スナップショットには名前が無い = base の時代
+            _scm = ((rec or {}).get("scorecard") or {}).get("model") if rec is not None else None
+            if not _scm:
+                _scm = next((h.get("sc_model") for h in lgb.values() if h.get("sc_model")), None)
             out.append(dict(d8=d8, rid=rid, name=name, surface=(pre or {}).get("surface"),
                             ood=is_ml_out_of_domain(name), posted=rid in posted, src=src,
-                            marks=marks, horses=horses))
+                            marks=marks, horses=horses, sc_model=_scm or "base"))
         meta.append({"d8": d8, "src": counts, "post_at": post_at})
     return out, meta
 
@@ -385,7 +390,12 @@ def report(target_days, conn=None, hist=None, since=SCORECARD_ERA, all_days=None
     except Exception:
         lin = 0.5
     v3 = [r for r in races if r["d8"] >= V3_ERA]
-    for lab, rs_ in (("今週", wk), (f"v3 ({V3_ERA[4:6]}/{V3_ERA[6:]}〜) 累計", v3)):
+    # #175: 回収型 (roi) の点数は目的もスケールも違うので、3着内の見込みに換算できない → 除外して数を出す
+    _base_only = lambda rs: [r for r in rs if r.get("sc_model", "base") == "base"]
+    _n_roi_wk, _n_roi_cum = len(wk) - len(_base_only(wk)), len(v3) - len(_base_only(v3))
+    if _n_roi_wk or _n_roi_cum:
+        out(f"  (c) 回収型 (roi) の点数は3着内の見込みに換算できないため除外: 今週 {_n_roi_wk}R / 累計 {_n_roi_cum}R")
+    for lab, rs_ in (("今週", _base_only(wk)), (f"v3 ({V3_ERA[4:6]}/{V3_ERA[6:]}〜) 累計", _base_only(v3))):
         acc = surface_switch(rs_, conn, lin)
         parts = []
         for k in ("初ダート", "初芝"):

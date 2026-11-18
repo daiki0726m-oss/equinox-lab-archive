@@ -267,7 +267,10 @@ def _run_meta(args=None, scorecard=None):
     if scorecard:
         sc = {"version": scorecard.get("version"),
               "train_until": scorecard.get("train_until"),
-              "degraded": scorecard.get("_degraded")}
+              "degraded": scorecard.get("_degraded"),
+              # #175: 印に使った点数表 (roi = 回収型 / base = 3着内) と補正窓の最終日
+              "model": scorecard.get("_sc_model"),
+              "lin_fit_until": scorecard.get("lin_fit_until")}
     return {k: v for k, v in meta.items() if v not in (None, "")}, sc
 
 

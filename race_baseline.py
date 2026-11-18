@@ -147,10 +147,35 @@ def confidence_thresholds():
     """
     d = load()
     cf = (d or {}).get("confidence") or {}
+    # #175: 印 (◎) を選ぶ点数表 (roi / base) ごとに閾値を持つ。実際に◎を選んでいる方の閾値を使う
+    # (印の点数表を戻した直後に、もう一方の◎の分布で引いた閾値を当てない)
+    name = _effective_scorecard()
+    by = (cf.get("by_scorecard") or {}).get(name) or {}
+    th = by.get("thresholds")
+    if by.get("available") and isinstance(th, dict) and all(k in th for k in "SABC"):
+        return {k: float(th[k]) for k in "SABC"}
     th = cf.get("thresholds")
     if cf.get("available") and isinstance(th, dict) and all(k in th for k in "SABC"):
+        if name and cf.get("scorecard") and cf.get("scorecard") != name and not _WARNED:
+            _WARNED.append(1)
+            print(f"  ⚠️ 信頼度の閾値は点数表 {cf.get('scorecard')} の◎で引いたもの (いまの印は {name}) — "
+                  f"scripts/build_race_baseline.py で引き直すこと (#175)")
         return {k: float(th[k]) for k in "SABC"}
     return dict(FALLBACK_THRESHOLDS)
+
+
+_WARNED = []
+
+
+def _effective_scorecard():
+    """印に実際に使われる点数表の名前 (predict と同じく、回収型のファイルが無ければ base)。"""
+    try:
+        import os as _os
+        from ml.scorecard import live_model_name, MODEL_PATHS
+        n = live_model_name()
+        return n if _os.path.exists(MODEL_PATHS.get(n, "")) else "base"
+    except Exception:
+        return None       # 判定できない時は基準表を作った時の閾値 (トップレベル) をそのまま使う
 
 
 def grade(win_pct):

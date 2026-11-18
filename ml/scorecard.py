@@ -441,12 +441,63 @@ def label(df, spec, skip=(), col_map=None):
     return pd.DataFrame(out, index=df.index)
 
 
-def load_model(path=None):
-    p = path or MODEL_PATH
-    if not os.path.exists(p):
-        return None
+# ── #175 (2026-11-18): 回収型の点数表と、どちらを印に使うかの切り替え ──
+# models/scorecard.pkl     = 3着内を目的にした点数表 (#145〜#169、名前 "base")
+# models/scorecard_roi.pkl = 単勝の払戻で重み付けした回収型 (#175、名前 "roi")
+# 印 (◎○▲△△) に使う方 = MARKS_SCORECARD_MODEL (env > config/prediction_flags.yml > "base")。
+# 使わない方も毎回計算して「影の印」(mark_shadow) として残し、毎週の集計で回収率を並べる
+# (scripts/scorecard_shadow_report.py)。戻す時は flag を "base" にするだけ。
+ROI_MODEL_PATH = os.path.join(os.path.dirname(MODEL_PATH), "scorecard_roi.pkl")
+MODEL_PATHS = {"base": MODEL_PATH, "roi": ROI_MODEL_PATH}
+
+
+def live_model_name():
+    """印に使う点数表の名前 ("base" / "roi")。不明な値は "base" (黙らせず警告)。"""
+    try:
+        import flags as _flags
+        v = (_flags.get("MARKS_SCORECARD_MODEL", "base") or "base").strip().lower()
+    except Exception:
+        v = (os.environ.get("MARKS_SCORECARD_MODEL") or "base").strip().lower()
+    if v not in MODEL_PATHS:
+        print(f"  ⚠️ MARKS_SCORECARD_MODEL={v!r} は不明 → base")
+        return "base"
+    return v
+
+
+def shadow_model_name(live=None):
+    """影の印に使う点数表の名前 (印に使わない方)。"""
+    return "base" if (live or live_model_name()) == "roi" else "roi"
+
+
+def _read(p):
     with open(p, "rb") as f:
         return pickle.load(f)
+
+
+def load_named_model(name):
+    """名前で読む。無ければ None。読んだモデルに _sc_model (名前) を付ける。"""
+    p = MODEL_PATHS.get(name)
+    if not p or not os.path.exists(p):
+        return None
+    m = _read(p)
+    if isinstance(m, dict):
+        m["_sc_model"] = name
+    return m
+
+
+def load_model(path=None):
+    """path を省くと「印に使う点数表」を読む (#175)。回収型を選んでいるのにファイルが無い時は
+    3着内の点数表に落とし、黙らせずに警告する (#134 の silent 無効化の再発防止)。"""
+    if path is not None:      # #175 レビュー: 空文字を「印に使う方」と取り違えない (従来は base だった)
+        if not path or not os.path.exists(path):
+            return None
+        return _read(path)
+    name = live_model_name()
+    m = load_named_model(name)
+    if m is None and name != "base":
+        print(f"  🚨 点数表: MARKS_SCORECARD_MODEL={name} なのに {MODEL_PATHS[name]} が無い → base で代用")
+        m = load_named_model("base")
+    return m
 
 
 def required_columns(model):
@@ -580,7 +631,9 @@ def sanitize_cached_reasons(horses, race_name="", model=None):
     if model is None:
         if not _SANITIZE_MODEL:
             try:
-                _SANITIZE_MODEL.append(load_model())
+                # #175: 内部表記 ("5/5") は #169 より前のキャッシュにしか無く、どれも 3着内の点数表 (base)
+                # で書かれている。印に使う方 (回収型) で照合すると点数が合わず、全部消してしまう
+                _SANITIZE_MODEL.append(load_named_model("base"))
             except Exception:
                 _SANITIZE_MODEL.append(None)
         model = _SANITIZE_MODEL[0]

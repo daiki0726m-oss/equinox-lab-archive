@@ -834,6 +834,17 @@ def main():
         print(f"\n⚠️ v3/v2 の対応比較 (#169) に失敗: {type(e).__name__}: {e}")
         traceback.print_exc()
         degraded.append(f"v3/v2 の対応比較が例外で落ちた ({type(e).__name__})")
+    try:
+        # #175: 回収型の点数表 vs 旧点数表 (影の印) の回収率。戻す基準の判定も出る
+        import scorecard_shadow_report as ssr
+        print("\n=== 回収型の点数表 vs 旧点数表 (#175) ===")
+        _s = ssr.summarize(ssr.score(ssr.collect_all_races()))
+        print(ssr.verdict(_s, coverage=ssr.COVERAGE.get("all"))[1])
+        print(ssr._md("全レース", _s))
+        print(ssr._md("投稿したレース", ssr.summarize(ssr.score(ssr.collect_posted_races()))))
+    except Exception as e:
+        print(f"\n⚠️ 回収型 vs 旧点数表の比較 (#175) に失敗: {type(e).__name__}: {e}")
+        degraded.append(f"回収型 vs 旧点数表の比較が例外で落ちた ({type(e).__name__})")
     if degraded:
         print("\n⚠️ 週次レポートの劣化 (#170): " + " / ".join(degraded))
         if os.environ.get('WEEKLY_REPORT_FAIL_ON_DEGRADED') == '1':

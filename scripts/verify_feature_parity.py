@@ -139,57 +139,73 @@ def check_models():
     # models/scorecard.pkl はヘルスチェックも再学習も通知も無く、
     # #134 の能力モデルと同じ silent 無効化 (読めない → sc_points=0 →
     # 印が黙って従来ロジックに落ちる) に無防備だった。
-    sp = os.path.join(mdir, "scorecard.pkl")
-    if os.path.exists(sp):
-        try:
-            with open(sp, "rb") as f:
-                sm = pickle.load(f)
-            from ml.scorecard import FEATS as _SC_FEATS
-            need = {c for c, *_ in _SC_FEATS}
-            have = {k.split("=")[0] for k in sm.get("cols", [])} | set(sm.get("spec", {}))
-            # drop した項目は区分点を持たない (v3 の F2 は当てはめ時から外す) ので欠けではない。
-            # 除かないと v3 の点数表で毎日「致命」を誤報し、週次の出荷ゲートも毎週落ちる (#168 レビュー)。
-            miss = need - have - set(sm.get("drop") or [])
-            if miss:
-                problems.append(("致命", f"scorecard: コードの特徴量 {sorted(miss)[:4]} が "
-                                         f"モデルに無い — 印が黙って従来ロジックに落ちる"))
-            if not sm.get("pts"):
-                problems.append(("致命", "scorecard: 点数表 (pts) が空"))
-            # v2 (連続項目): コードが知らない列を要求していないか
-            from ml.scorecard import LIN_DIR as _SC_LIN
-            bad_lin = sorted(set(sm.get("lin") or {}) - set(_SC_LIN))
-            if bad_lin:
-                problems.append(("致命", f"scorecard: 連続項目 {bad_lin} がコード (LIN_FEATS) に無い "
-                                         f"— 点数の計算が失敗し印が従来ロジックに落ちる"))
-            bad_drop = sorted(set(sm.get("drop") or []) - need)
-            if bad_drop:
-                problems.append(("警告", f"scorecard: drop {bad_drop} がコードの FEATS に無い"))
-            # v3 (#168): 区分の差し替え列・生の値で足す項目をコードが作るか / 基準表が当てはめ時と同じか
-            from ml.scorecard import FLAG_KIND as _SC_FLAG, check_si_variant
-            from ml import speed_variant as _sv
-            known = set(_sv.SV_COLS) | {c for c, *_ in _SC_FEATS}
-            bad_map = sorted(set((sm.get("col_map") or {}).values()) - known)
-            if bad_map:
-                problems.append(("致命", f"scorecard: col_map の列 {bad_map} をコードが作らない "
-                                         f"— 点数の計算が失敗し印が従来ロジックに落ちる"))
-            bad_flag = sorted(set(sm.get("flags") or {}) - set(_SC_FLAG))
-            if bad_flag:
-                problems.append(("致命", f"scorecard: 項目 {bad_flag} がコード (FLAG_FEATS) に無い"))
-            msg = check_si_variant(sm)
-            if msg:
-                problems.append(("致命", f"scorecard: {msg}"))
-            # #169: 区分の表示名 (区分境界から作る) が段数と合うか。合わない区分は内訳に
-            # 出さない (内部表記は出さない) ので印・点数は無事 = 警告。v3 で4→5段に変わった
-            # 時はこの検査が無く、内部表記「5/5」が画面に出ていた
-            from ml.scorecard import check_display_bins
-            for _p in check_display_bins(sm):
-                problems.append(("警告", f"scorecard 表示名: {_p}"))
-        except Exception as e:
-            problems.append(("致命", f"scorecard.pkl 読込失敗: {e} "
-                                     f"— MARKS_SCORECARD=1 が silent 無効化される"))
-    else:
-        problems.append(("警告", "models/scorecard.pkl が無い "
-                                 "(MARKS_SCORECARD=1 なら印が従来ロジックになる)"))
+    # #175: 点数表は2つ (scorecard.pkl = 3着内 / scorecard_roi.pkl = 回収型)。印に使う方
+    # (MARKS_SCORECARD_MODEL) が無い・壊れているのは致命、影の方は警告 (印には使わない)。
+    try:
+        from ml.scorecard import live_model_name as _live_sc
+        _live = _live_sc()
+    except Exception:
+        _live = "base"
+    for _sc_file, _sc_name in (("scorecard.pkl", "base"), ("scorecard_roi.pkl", "roi")):
+      _sev = "致命" if _sc_name == _live else "警告"   # 影の点数表の問題は印を止めない
+      sp = os.path.join(mdir, _sc_file)
+      if os.path.exists(sp):
+          try:
+              with open(sp, "rb") as f:
+                  sm = pickle.load(f)
+              from ml.scorecard import FEATS as _SC_FEATS
+              need = {c for c, *_ in _SC_FEATS}
+              have = {k.split("=")[0] for k in sm.get("cols", [])} | set(sm.get("spec", {}))
+              # drop した項目は区分点を持たない (v3 の F2 は当てはめ時から外す) ので欠けではない。
+              # 除かないと v3 の点数表で毎日「致命」を誤報し、週次の出荷ゲートも毎週落ちる (#168 レビュー)。
+              miss = need - have - set(sm.get("drop") or [])
+              if miss:
+                  problems.append((_sev, f"{_sc_file}: コードの特徴量 {sorted(miss)[:4]} が "
+                                           f"モデルに無い — 印が黙って従来ロジックに落ちる"))
+              if not sm.get("pts"):
+                  problems.append((_sev, f"{_sc_file}: 点数表 (pts) が空"))
+              # #175 レビュー: 枠と中身の取り違え (回収型の枠に3着内の点数表 / その逆) を止める。
+              # 取り違えると印が黙って別の目的になるか、影の印と同じになり毎週の比較が差0で止まる
+              _obj = ((sm.get("objective") or {}).get("name")) or "top3"
+              _want = "roi_win" if _sc_name == "roi" else "top3"
+              if _obj != _want:
+                  problems.append((_sev, f"{_sc_file}: 中身の目的が {_obj} (この枠は {_want} のはず) — "
+                                         f"学習の --out を取り違えていないか確認"))
+              # v2 (連続項目): コードが知らない列を要求していないか
+              from ml.scorecard import LIN_DIR as _SC_LIN
+              bad_lin = sorted(set(sm.get("lin") or {}) - set(_SC_LIN))
+              if bad_lin:
+                  problems.append((_sev, f"{_sc_file}: 連続項目 {bad_lin} がコード (LIN_FEATS) に無い "
+                                           f"— 点数の計算が失敗し印が従来ロジックに落ちる"))
+              bad_drop = sorted(set(sm.get("drop") or []) - need)
+              if bad_drop:
+                  problems.append(("警告", f"{_sc_file}: drop {bad_drop} がコードの FEATS に無い"))
+              # v3 (#168): 区分の差し替え列・生の値で足す項目をコードが作るか / 基準表が当てはめ時と同じか
+              from ml.scorecard import FLAG_KIND as _SC_FLAG, check_si_variant
+              from ml import speed_variant as _sv
+              known = set(_sv.SV_COLS) | {c for c, *_ in _SC_FEATS}
+              bad_map = sorted(set((sm.get("col_map") or {}).values()) - known)
+              if bad_map:
+                  problems.append((_sev, f"{_sc_file}: col_map の列 {bad_map} をコードが作らない "
+                                           f"— 点数の計算が失敗し印が従来ロジックに落ちる"))
+              bad_flag = sorted(set(sm.get("flags") or {}) - set(_SC_FLAG))
+              if bad_flag:
+                  problems.append((_sev, f"{_sc_file}: 項目 {bad_flag} がコード (FLAG_FEATS) に無い"))
+              msg = check_si_variant(sm)
+              if msg:
+                  problems.append((_sev, f"{_sc_file}: {msg}"))
+              # #169: 区分の表示名 (区分境界から作る) が段数と合うか。合わない区分は内訳に
+              # 出さない (内部表記は出さない) ので印・点数は無事 = 警告。v3 で4→5段に変わった
+              # 時はこの検査が無く、内部表記「5/5」が画面に出ていた
+              from ml.scorecard import check_display_bins
+              for _p in check_display_bins(sm):
+                  problems.append(("警告", f"{_sc_file} 表示名: {_p}"))
+          except Exception as e:
+              problems.append((_sev, f"{_sc_file} 読込失敗: {e} "
+                                       f"— MARKS_SCORECARD=1 が silent 無効化される"))
+      else:
+          problems.append((_sev, f"models/{_sc_file} が無い "
+                                   f"(印に使う点数表は {_live}。印に使う方が無いと従来ロジック/代用になる)"))
 
     # 能力モデルは列数が違ってよい (市場特徴量を除くため) が、読み込めることは必須
     ap = os.path.join(mdir, "model_ability_win.pkl")

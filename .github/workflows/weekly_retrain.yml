@@ -171,6 +171,45 @@ jobs:
             fi
           fi
 
+      # #175: 印を回収型の点数表に切り替えた (2026-11-18)。使わなかった方の点数表の印 (影の印) と
+      # 同じレースの回収率を毎週並べ、戻す基準 (7種平均の差の95%上限<0、300R以上) に当たったら
+      # Issue にする (印を戻すのは人が config/prediction_flags.yml を base にする)。
+      - name: 🔁 回収型の点数表 vs 旧点数表 (#175)
+        if: always() && steps.check.outputs.run == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          python3 scripts/scorecard_shadow_report.py --output docs/data/scorecard_shadow.json > /tmp/shadow.md 2>&1
+          CODE=$?
+          set -e
+          cat /tmp/shadow.md || true
+          echo "比較の終了コード: $CODE (0=継続/保留/材料なし 10=戻す基準に該当 11=影の印が欠けている それ以外=失敗)"
+          case "$CODE" in
+            0) exit 0 ;;
+            10) TITLE="🔻 回収型の点数表: 戻す基準に該当 (#175)" ;;
+            11) TITLE="⚠️ 回収型の比較: 影の印が欠けている (#175)" ;;
+            *) TITLE="⚠️ 回収型の比較スクリプトが失敗 (#175)" ;;
+          esac
+          BODY="$(cat /tmp/shadow.md)
+
+          Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          OPEN=$(gh issue list --state open --search "\"$TITLE\" in:title" --json number,title \
+            --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty" 2>/dev/null || true)
+          if [ -n "$OPEN" ]; then
+            gh issue comment "$OPEN" --body "$BODY" || echo "⚠️ Issue コメント失敗"
+            exit 0
+          fi
+          # 人が「戻さない」と判断して閉じた Issue は8週間は作り直さない (#169 と同じ考え方)
+          RECENT=$(gh issue list --state closed --search "\"$TITLE\" in:title" --json title,closedAt \
+            --jq "map(select(.title == \"$TITLE\") | .closedAt) | max // empty" 2>/dev/null || true)
+          if [ -n "$RECENT" ] && [ "$(python3 -c "import datetime as d,sys; t=d.datetime.fromisoformat(sys.argv[1].replace('Z','+00:00')); print(int((d.datetime.now(d.timezone.utc)-t).days < 56))" "$RECENT")" = "1" ]; then
+            echo "ℹ️ 同じ Issue が $RECENT に閉じられている (8週間以内) → 作り直さない"
+            exit 0
+          fi
+          gh issue create --title "$TITLE" --body "$BODY" || echo "⚠️ Issue 作成失敗"
+
       # #114: retrain スキップ週も ROI レポートは毎週公開する (7/13 に retrain skip →
       # roi_weekly.json が 11日 stale = #111「週次ROI報告」の結線切れが実発生)
       # #135 (2026-09-01): 出荷前ゲート。#134 で model_rank が **木3本** で出荷され
@@ -195,6 +234,8 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           bash scripts/db_pack.sh
           git add models/ keiba.db.gz docs/data/roi_weekly.json docs/data/mark_tracker.json models/train_boundary.json docs/data/race_baseline.json docs/data/roi_flag_history.json
+          # #175: 比較の結果 (スクリプトが落ちて書かれなかった週に pathspec エラーで commit 全体を止めない)
+          [ -f docs/data/scorecard_shadow.json ] && git add docs/data/scorecard_shadow.json || true
           if git diff --staged --quiet; then
             echo "📭 変更なし"
             echo "model_changed=false" >> "$GITHUB_OUTPUT"

@@ -101,10 +101,11 @@ def _load_scorecard():
     _SCORECARD_TRIED = True
     try:
         from ml.scorecard import load_model
-        _SCORECARD = load_model()
+        _SCORECARD = load_model()      # #175: 印に使う方 (MARKS_SCORECARD_MODEL)
         if _SCORECARD:
-            print(f"  📋 点数表モデル読込 (学習〜{_SCORECARD.get('train_until')}"
-                  f" / 係数{len(_SCORECARD.get('pts', {}))}個)")
+            print(f"  📋 点数表モデル読込 [{_SCORECARD.get('_sc_model', '?')}] "
+                  f"{_SCORECARD.get('version', '')} (学習〜{_SCORECARD.get('train_until')}"
+                  f" / 補正〜{_SCORECARD.get('lin_fit_until')} / 係数{len(_SCORECARD.get('pts', {}))}個)")
             # #168: V2d (si_avg_v) を使う点数表なのに基準表が無い・壊れている・当てはめ時と違う
             # → 違う基準表の V2d を黙って使わず、指数の区分だけ現行の si_avg/si_latest で代用する
             #   (印は点数表のまま。従来ロジック = 市場寄りの pred_top3 には落とさない)。
@@ -132,6 +133,65 @@ def _load_scorecard():
         print(f"  ⚠️ 点数表モデルの読込失敗: {e}")
         _SCORECARD = None
     return _SCORECARD
+
+
+_SC_SHADOW = None
+_SC_SHADOW_TRIED = False
+
+
+def _load_shadow_scorecard():
+    """#175: 影の点数表 (印に使わない方) を読む。無ければ None。
+
+    印には一切使わない。毎回同じ母集団で点数を付けて「この点数表だったら印はこうだった」を
+    mark_shadow として残し、毎週 scripts/scorecard_shadow_report.py が回収率を並べる
+    (切り替えの効果を、同じレース・同じ日で比べ続けるため)。ここで何が起きても印は止めない。"""
+    global _SC_SHADOW, _SC_SHADOW_TRIED
+    if _SC_SHADOW_TRIED:
+        return _SC_SHADOW
+    _SC_SHADOW_TRIED = True
+    try:
+        live = _load_scorecard()
+        if not live:
+            return None
+        from ml.scorecard import load_named_model, shadow_model_name, check_si_variant, without_col_map
+        name = shadow_model_name(live.get("_sc_model") or "base")
+        m = load_named_model(name)
+        if m:
+            _msg = check_si_variant(m)
+            if _msg:
+                m = without_col_map(m, _msg)
+                print(f"  🚨 影の点数表 [{name}]: {_msg} → 指数の区分は si_avg/si_latest で代用")
+            print(f"  👥 影の点数表 [{name}] {m.get('version', '')} (印には使わない。毎週の比較用 #175)")
+        else:
+            print(f"  ⚠️ 影の点数表 [{name}] が無い (models/ にファイルなし) → 影の印 (mark_shadow) なし。"
+                  f"印には影響なし。毎週の比較 (#175) の材料が貯まらない")
+        _SC_SHADOW = m
+    except Exception as e:
+        print(f"  ⚠️ 影の点数表の読込失敗 (印には影響なし): {e!r}")
+        _SC_SHADOW = None
+    return _SC_SHADOW
+
+
+def _shadow_points(d, keep):
+    """#175: 影の点数表の合計点 (印の母集団 = 取消を除いた馬)。使えなければ None。"""
+    try:
+        sm = _load_shadow_scorecard()
+        if not sm:
+            return None
+        import numpy as np
+        from ml.scorecard import required_columns, score_with_reasons
+        miss = [c for c in required_columns(sm) if c not in d.columns]
+        if miss:
+            print(f"  ⚠️ 影の点数表: 特徴量 {len(miss)}列が無い ({miss[:3]}) → 影の印なし")
+            return None
+        if keep is None:
+            return np.asarray(score_with_reasons(d, sm)[0], dtype=float)
+        pts = np.full(len(d), np.nan)
+        pts[keep] = score_with_reasons(d[keep], sm)[0]
+        return pts
+    except Exception as e:
+        print(f"  ⚠️ 影の点数表の計算失敗 (印には影響なし): {e!r}")
+        return None
 
 
 def _is_scratch_odds(odds, popularity):
@@ -305,6 +365,10 @@ def _attach_scorecard(pred_df, race_id=None, exclude=None):
                   f"{sorted(int(x) for x in exclude)}) #169")
         pred_df["_sc_points"] = pts
         pred_df["_sc_reasons"] = reasons
+        # #175: 影の点数表 (同じ母集団・同じ特徴量)。印には使わない
+        _sh = _shadow_points(d, _keep)
+        if _sh is not None:
+            pred_df["_sc_points_shadow"] = _sh
     except Exception as e:
         print(f"  ⚠️ 点数表の計算失敗 ({e}) → 点数0")
         pred_df["_sc_points"] = 0.0
@@ -1114,6 +1178,9 @@ def cmd_predict(args):
                 # #169: 印の並べ替えは丸めない点数で行う (sc_points の小数1桁は表示用)。
                 # 旧実装は丸めた値で並べており、同点になると直前の LGB 順 (オッズ寄り) が残った。
                 "_sc_points_raw": float(row.get("_sc_points", 0) or 0),
+                # #175: 影の点数表の合計点 (NaN = 取消で採点していない / None = 影なし)
+                "_sc_points_shadow_raw": (None if row.get("_sc_points_shadow") is None
+                                          else float(row.get("_sc_points_shadow"))),
                 # #169: 予想時点で取消と分かっている馬 (印の候補から外す。cache には
                 # "scratched" として保存し、投稿の 💡能力値1位 などが取消馬を名指ししないようにする)
                 "_scratched": int(row["horse_number"]) in _scratched,
@@ -1445,6 +1512,24 @@ def cmd_predict(args):
                 if i < len(capture5):
                     capture5[i]['mark'] = mk
 
+            # ── #175: 影の印 (印に使わない方の点数表で選んだら、こうだった) ──
+            # 同じ候補 (_cands)・同じ並べ方 (丸めない点数、同点は馬番の小さい方)。印・☆・注・
+            # 買い目には一切使わない。毎週 scripts/scorecard_shadow_report.py が、実際の印と
+            # 影の印それぞれから組む買い方の回収率を同じレースで並べる (戻すかどうかの判断材料)。
+            _sc_name = (_SCORECARD or {}).get('_sc_model', '') if _sc_ok else ''
+            for p in sorted_preds:
+                p['sc_model'] = _sc_name
+            if _sc_ok:
+                import math as _m
+
+                def _shk(p):
+                    v = p.get('_sc_points_shadow_raw')
+                    v = -1e18 if (v is None or (isinstance(v, float) and _m.isnan(v))) else float(v)
+                    return (-v, p['horse_number'])
+                if any(p.get('_sc_points_shadow_raw') is not None for p in _cands):
+                    for i, p in enumerate(sorted(_cands, key=_shk)[:5]):
+                        p['mark_shadow'] = _symbols[i]
+
             # ── ☆ = 妙味枠 (モデル複勝率÷市場率が最大の 5-20倍馬、印5頭の外) ──
             # #110 で ○ に入れていたものを、印の枠を奪わない別建てに移した。
             if flags.is_on('MARKS_VALUE_TAIKO') and _has_market:
@@ -1581,6 +1666,10 @@ def cmd_predict(args):
             #    ここまで届かない (実際 sc_points が全頭 None で保存される事故を起こした)。
             "sc_points": p.get("sc_points", 0),
             "sc_reasons": p.get("sc_reasons", []),
+            # #175: 印に使った点数表の名前 (roi/base、点数表を使わなかったレースは "") と、
+            # 使わなかった方の点数表で選んだ印 (影の印)。毎週の比較 (scorecard_shadow_report) の材料
+            "sc_model": p.get("sc_model", ""),
+            "mark_shadow": p.get("mark_shadow", ""),
             # #169: 予想時点で取消と分かっている馬。印の候補から外した判定を下流 (投稿の
             # 💡能力値1位・Threads の能力値ランキング) にも渡す。旧 cache には無い = False 扱い。
             "scratched": bool(p.get("_scratched", False)),
