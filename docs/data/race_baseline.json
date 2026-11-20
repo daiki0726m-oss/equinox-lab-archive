@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-21T02:12:30.820300+09:00",
+ "generated_at": "2026-11-21T06:32:21.093474+09:00",
  "capture": {
   "groups": {
    "flat": {
@@ -216,30 +216,30 @@
    "S": 33.1,
    "A": 20.0,
    "B": 12.2,
-   "C": 6.8
+   "C": 7.3
   },
   "calibrated_on": "補正後 (confidence.post_adjust 込み) の最終構成比",
   "mix_before_adjust": {
-   "S": 0.1165,
+   "S": 0.119,
    "A": 0.2481,
-   "B": 0.3468,
-   "C": 0.1823,
-   "D": 0.1063
+   "B": 0.3443,
+   "C": 0.1772,
+   "D": 0.1114
   },
   "mix_after_adjust": {
    "S": 0.1797,
    "A": 0.2405,
    "B": 0.2911,
-   "C": 0.1823,
-   "D": 0.1063
+   "C": 0.1772,
+   "D": 0.1114
   },
-  "adjusted_share": 0.119,
+  "adjusted_share": 0.1139,
   "realized_mix": {
    "S": 0.2857,
    "A": 0.2143,
    "B": 0.2143,
-   "C": 0.2143,
-   "D": 0.0714
+   "C": 0.2857,
+   "D": 0.0
   },
   "realized_n": 14,
   "realized_note": "各予測の時点の閾値・補正で付いた信頼度 (predictions_cache.confidence)",
@@ -248,8 +248,8 @@
    "S": 0.2857,
    "A": 0.2143,
    "B": 0.2143,
-   "C": 0.2143,
-   "D": 0.0714
+   "C": 0.2857,
+   "D": 0.0
   },
   "realized_new_logic_n": 14,
   "by_scorecard": {
@@ -259,7 +259,7 @@
      "S": 33.1,
      "A": 20.0,
      "B": 12.2,
-     "C": 6.8
+     "C": 7.3
     },
     "n": 395,
     "sample": "点数表 roi の◎ (印として付いた◎ 14件 + 過去を roi で選び直した◎ 381件)",
@@ -268,10 +268,10 @@
    "base": {
     "available": true,
     "thresholds": {
-     "S": 39.1,
+     "S": 38.1,
      "A": 22.6,
      "B": 13.7,
-     "C": 9.2
+     "C": 9.3
     },
     "n": 395,
     "sample": "点数表 base の◎ (影の印の◎ 14件 + #175 より前の◎ 381件)",
@@ -296,9 +296,9 @@
   "window_rule": "since_prev_model",
   "n_current": 14,
   "n_older": 40,
-  "sd_median_current": 0.7828,
+  "sd_median_current": 0.8008,
   "sd_median_older": 0.7128,
-  "dispersion_ratio": 1.098,
+  "dispersion_ratio": 1.124,
   "dispersion_ratio_limit": 1.4,
   "prev_model_deployed_at": "2026-11-09 20:13:31"
  },
