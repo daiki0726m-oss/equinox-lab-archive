@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-16T19:52:55.156024+09:00",
+ "generated_at": "2026-11-21T02:12:30.820300+09:00",
  "capture": {
   "groups": {
    "flat": {
@@ -201,10 +201,10 @@
  },
  "confidence": {
   "available": true,
-  "n": 381,
-  "sample": "点数表 roi の◎ (過去を roi で選び直した◎ 381件)",
+  "n": 395,
+  "sample": "点数表 roi の◎ (印として付いた◎ 14件 + 過去を roi で選び直した◎ 381件)",
   "scorecard": "roi",
-  "sample_period": "2026-09-05〜2026-11-15",
+  "sample_period": "2026-09-05〜2026-11-22",
   "target_mix": {
    "S": 0.18,
    "A": 0.24,
@@ -214,103 +214,93 @@
   },
   "thresholds": {
    "S": 33.1,
-   "A": 19.9,
+   "A": 20.0,
    "B": 12.2,
    "C": 6.8
   },
   "calibrated_on": "補正後 (confidence.post_adjust 込み) の最終構成比",
   "mix_before_adjust": {
-   "S": 0.1155,
-   "A": 0.2572,
-   "B": 0.3386,
-   "C": 0.1811,
-   "D": 0.1076
+   "S": 0.1165,
+   "A": 0.2481,
+   "B": 0.3468,
+   "C": 0.1823,
+   "D": 0.1063
   },
   "mix_after_adjust": {
-   "S": 0.1811,
-   "A": 0.2388,
-   "B": 0.2913,
-   "C": 0.1811,
-   "D": 0.1076
+   "S": 0.1797,
+   "A": 0.2405,
+   "B": 0.2911,
+   "C": 0.1823,
+   "D": 0.1063
   },
-  "adjusted_share": 0.1129,
+  "adjusted_share": 0.119,
   "realized_mix": {
-   "S": 0.0,
-   "A": 0.0,
-   "B": 0.0,
-   "C": 0.0,
-   "D": 0.0
+   "S": 0.2857,
+   "A": 0.2143,
+   "B": 0.2143,
+   "C": 0.2143,
+   "D": 0.0714
   },
-  "realized_n": 0,
+  "realized_n": 14,
   "realized_note": "各予測の時点の閾値・補正で付いた信頼度 (predictions_cache.confidence)",
   "realized_new_logic_since": "2026-11-07",
   "realized_new_logic_mix": {
-   "S": 0.0,
-   "A": 0.0,
-   "B": 0.0,
-   "C": 0.0,
-   "D": 0.0
+   "S": 0.2857,
+   "A": 0.2143,
+   "B": 0.2143,
+   "C": 0.2143,
+   "D": 0.0714
   },
-  "realized_new_logic_n": 0,
+  "realized_new_logic_n": 14,
   "by_scorecard": {
    "roi": {
     "available": true,
     "thresholds": {
      "S": 33.1,
-     "A": 19.9,
+     "A": 20.0,
      "B": 12.2,
      "C": 6.8
     },
-    "n": 381,
-    "sample": "点数表 roi の◎ (過去を roi で選び直した◎ 381件)",
-    "sample_period": "2026-09-05〜2026-11-15"
+    "n": 395,
+    "sample": "点数表 roi の◎ (印として付いた◎ 14件 + 過去を roi で選び直した◎ 381件)",
+    "sample_period": "2026-09-05〜2026-11-22"
    },
    "base": {
     "available": true,
     "thresholds": {
-     "S": 35.4,
-     "A": 22.5,
+     "S": 39.1,
+     "A": 22.6,
      "B": 13.7,
-     "C": 9.3
+     "C": 9.2
     },
-    "n": 381,
-    "sample": "点数表 base の◎ (#175 より前の◎ 381件)",
-    "sample_period": "2026-09-05〜2026-11-15"
+    "n": 395,
+    "sample": "点数表 base の◎ (影の印の◎ 14件 + #175 より前の◎ 381件)",
+    "sample_period": "2026-09-05〜2026-11-22"
    }
-  },
-  "previous_thresholds_175": {
-   "thresholds": {
-    "S": 40.4,
-    "A": 21.3,
-    "B": 13.2,
-    "C": 9.2
-   },
-   "sample": "点数表 (現行)",
-   "sample_period": "2026-10-10〜2026-11-15"
   }
  },
  "bet_gate": {
   "available": true,
-  "n": 40,
+  "n": 54,
   "target_block_rate": {
    "top_prob": 0.3,
    "top3_sum": 0.25
   },
-  "model_deployed_at": "2026-11-09 20:13:31",
+  "model_deployed_at": "2026-11-16 19:53:16",
   "window_matches_model": false,
-  "model_retrained_uncommitted": true,
+  "model_retrained_uncommitted": false,
   "thresholds": {
    "top_prob": 0.1484,
    "top3_sum": 0.3796
   },
-  "window_rule": "current_model",
-  "n_current": 40,
-  "n_older": null,
-  "sd_median_current": null,
-  "sd_median_older": null,
-  "dispersion_ratio": null,
+  "window_rule": "since_prev_model",
+  "n_current": 14,
+  "n_older": 40,
+  "sd_median_current": 0.7828,
+  "sd_median_older": 0.7128,
+  "dispersion_ratio": 1.098,
   "dispersion_ratio_limit": 1.4,
-  "prev_model_deployed_at": null
+  "prev_model_deployed_at": "2026-11-09 20:13:31"
  },
  "confidence_adjust_watch": {
   "since": "2026-11-07",
