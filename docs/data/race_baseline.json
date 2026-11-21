@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-21T06:32:21.093474+09:00",
+ "generated_at": "2026-11-21T09:06:18.214171+09:00",
  "capture": {
   "groups": {
    "flat": {
@@ -277,6 +277,17 @@
     "sample": "点数表 base の◎ (影の印の◎ 14件 + #175 より前の◎ 381件)",
     "sample_period": "2026-09-05〜2026-11-22"
    }
+  },
+  "keep_reason": "週末の途中 (土曜の最後の作り直し (9:00) 以降)",
+  "if_rebuilt": {
+   "thresholds": {
+    "S": 32.3,
+    "A": 20.0,
+    "B": 12.2,
+    "C": 6.8
+   },
+   "n": 382,
+   "sample_period": "2026-09-05〜2026-11-22"
   }
  },
  "bet_gate": {
@@ -300,7 +311,14 @@
   "sd_median_older": 0.7128,
   "dispersion_ratio": 1.124,
   "dispersion_ratio_limit": 1.4,
-  "prev_model_deployed_at": "2026-11-09 20:13:31"
+  "prev_model_deployed_at": "2026-11-09 20:13:31",
+  "keep_reason": "週末の途中 (土曜の最後の作り直し (9:00) 以降)",
+  "sunday_check": {
+   "available": false,
+   "n": 1,
+   "model_deployed_at": "2026-11-16 19:53:16",
+   "note": "現モデルだけの窓の使えるレースが 1 件 (< 30) → 比較しない"
+  }
  },
  "confidence_adjust_watch": {
   "since": "2026-11-07",
